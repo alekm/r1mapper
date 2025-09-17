@@ -11,40 +11,77 @@ export class RuckusApiService {
   }
 
   async authenticate(): Promise<void> {
-    const tokenUrl = `/oauth2/token/${this.config.tenantId}`;
+    const tokenUrl = `/oauth2/token/${encodeURIComponent(this.config.tenantId)}`;
     
-    const authData = new URLSearchParams({
-      grant_type: 'client_credentials',
-      scope: 'read write',
-    });
+    // Try multiple authentication methods like r1helper.com
+    const attempts = [
+      // Method 1: client_id/client_secret in form body (preferred)
+      async () => {
+        const authData = new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: this.config.clientId,
+          client_secret: this.config.clientSecret,
+        });
 
-    const response = await apiFetch(this.config.region, tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
+        return apiFetch(this.config.region, tokenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: authData,
+        });
       },
-      body: authData,
-    });
+      // Method 2: Basic auth (fallback)
+      async () => {
+        const authData = new URLSearchParams({
+          grant_type: 'client_credentials',
+        });
 
-    if (!response.ok) {
-      let errorText = '';
+        return apiFetch(this.config.region, tokenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
+          },
+          body: authData,
+        });
+      }
+    ];
+
+    let lastError: Error | null = null;
+
+    for (const attempt of attempts) {
       try {
-        errorText = await response.text();
-      } catch {
-        errorText = 'Unable to parse error response';
+        const response = await attempt();
+        
+        if (response.ok) {
+          const data = await response.json();
+          this.accessToken = data.access_token;
+          return; // Success!
+        }
+
+        // If not successful, try next method
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch {
+          errorText = 'Unable to parse error response';
+        }
+        
+        lastError = new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
+      } catch (error) {
+        lastError = error as Error;
       }
-      
-      // Handle specific authentication errors
-      if (response.status === 500 && errorText.includes('maximum redirect reached')) {
-        throw new Error('Authentication failed - please check your credentials');
-      }
-      
-      throw new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    const data = await response.json();
-    this.accessToken = data.access_token;
+    // If all attempts failed, throw the last error
+    if (lastError) {
+      // Handle specific authentication errors
+      if (lastError.message.includes('maximum redirect reached')) {
+        throw new Error('Authentication failed - please check your credentials');
+      }
+      throw lastError;
+    }
   }
 
   private async makeApiCall(path: string, options: RequestInit = {}): Promise<Response> {
