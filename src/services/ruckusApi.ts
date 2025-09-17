@@ -399,6 +399,11 @@ export class RuckusApiService {
       } catch (qErr) {
         // Log and continue retrying
         console.warn(`RuckusApiService: LLDP neighbors query failed (attempt ${attempt + 1}/${maxAttempts}) for AP ${serialNumber}`, qErr);
+        const msg = qErr instanceof Error ? qErr.message : String(qErr);
+        // If Ruckus API explicitly reports no neighbor data, stop retrying for this AP
+        if (msg.includes('WIFI-10498') || msg.toLowerCase().includes('no detected neighbor data') || msg.startsWith('API request failed: 400')) {
+          return [];
+        }
       }
       // Backoff between attempts
       await new Promise(r => setTimeout(r, 1000 + attempt * 500));
