@@ -56,9 +56,9 @@ function AppContent() {
   // Auto-load data when API service is ready
   useEffect(() => {
     if (apiService && demoMode) {
-      // Defer demo data load to avoid blocking the initial render
+      // For demo mode, load venues first, then devices
       setTimeout(() => {
-        loadNetworkData();
+        loadVenues();
       }, 0);
     } else if (apiService && !demoMode) {
       // For real API, load venues but not devices
@@ -69,10 +69,10 @@ function AppContent() {
   }, [apiService, demoMode]);
 
   const loadVenues = async () => {
-    if (!apiService || apiService instanceof DemoApiService) return;
+    if (!apiService) return;
     
     try {
-      const loadedVenues = await (apiService as RuckusApiService).getVenues();
+      const loadedVenues = await apiService.getVenues();
       setVenues(loadedVenues);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load venues');

@@ -60,14 +60,12 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
       </div>
 
       {/* Venue Selector */}
-      {!demoMode && (
-        <VenueSelector
-          venues={venues}
-          selectedVenueId={selectedVenueId}
-          onVenueSelect={onVenueSelect}
-          loading={loading}
-        />
-      )}
+      <VenueSelector
+        venues={venues}
+        selectedVenueId={selectedVenueId}
+        onVenueSelect={onVenueSelect}
+        loading={loading}
+      />
       
       {/* Main Content */}
       <div className="flex-1 flex">
@@ -313,7 +311,7 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
 
         {/* Topology View */}
         <div className="flex-1 relative">
-          {!demoMode && !selectedVenueId && (
+          {!selectedVenueId && (
             <div className="absolute inset-0 flex items-center justify-center z-30">
               <div className="text-center bg-white rounded-lg shadow-lg p-8 max-w-md">
                 <Building2 className="h-16 w-16 text-gray-400 mx-auto mb-4" />

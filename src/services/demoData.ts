@@ -1,4 +1,26 @@
-import { RuckusDevice, LLDPLink } from '../types';
+import { RuckusDevice, LLDPLink, Venue } from '../types';
+
+// Demo venues for testing venue selection
+export const demoVenues: Venue[] = [
+  {
+    id: 'venue-001',
+    name: 'Main Office',
+    address: 'San Francisco, CA',
+    location: {
+      latitude: 37.7749,
+      longitude: -122.4194
+    }
+  },
+  {
+    id: 'venue-002', 
+    name: 'Branch Office',
+    address: 'New York, NY',
+    location: {
+      latitude: 40.7128,
+      longitude: -74.0060
+    }
+  }
+];
 
 // Demo data for testing the application without API access
 export const demoDevices: RuckusDevice[] = [
@@ -112,6 +134,45 @@ export const demoDevices: RuckusDevice[] = [
     firmwareVersion: '5.1.1.0.1200',
     uptime: 0,
     venueId: 'venue-001'
+  },
+  // Branch Office devices (venue-002)
+  {
+    id: 'ap-003',
+    name: 'Branch Office AP-01',
+    type: 'ap',
+    model: 'R650',
+    serialNumber: 'SN123456791',
+    macAddress: '00:11:22:33:44:57',
+    ipAddress: '192.168.2.10',
+    status: 'online',
+    location: {
+      latitude: 40.7128,
+      longitude: -74.0060,
+      address: 'New York, NY'
+    },
+    lastSeen: new Date().toISOString(),
+    firmwareVersion: '5.1.2.0.1234',
+    uptime: 43200, // 12 hours
+    venueId: 'venue-002'
+  },
+  {
+    id: 'switch-003',
+    name: 'Branch Switch-01',
+    type: 'switch',
+    model: 'ICX 7650-48P',
+    serialNumber: 'N/A',
+    macAddress: '00:aa:bb:cc:dd:ff',
+    ipAddress: '192.168.2.1',
+    status: 'online',
+    location: {
+      latitude: 40.7129,
+      longitude: -74.0061,
+      address: 'New York, NY'
+    },
+    lastSeen: new Date().toISOString(),
+    firmwareVersion: '8.0.95a',
+    uptime: 129600, // 1.5 days
+    venueId: 'venue-002'
   }
 ];
 
@@ -170,6 +231,12 @@ export const demoLinks: LLDPLink[] = [
 
 // Demo API service that returns the demo data
 export class DemoApiService {
+  async getVenues(): Promise<Venue[]> {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return demoVenues;
+  }
+
   async getDevices(): Promise<RuckusDevice[]> {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
