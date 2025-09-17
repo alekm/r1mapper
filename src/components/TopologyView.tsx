@@ -698,16 +698,6 @@ const TopologyView: React.FC<TopologyViewProps> = ({
                 r={5}
                 fill={statusColor}
               />
-              
-              {/* Status text */}
-              <text
-                x={position.x + 18}
-                y={position.y - 15}
-                textAnchor="middle"
-                className="text-xs font-bold text-white pointer-events-none"
-              >
-                {device.status === 'online' ? '●' : device.status === 'offline' ? '●' : '●'}
-              </text>
             </g>
           );
         })}
