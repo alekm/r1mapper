@@ -290,7 +290,12 @@ export class RuckusApiService {
               id: ap.macAddress || ap.serialNumber || ap.id || '',
               name: ap.name || ap.model || 'Unknown AP',
               type: 'ap' as const,
-              status: ap.status || 'unknown',
+              status: (() => {
+                const status = ap.status || '';
+                if (status.includes('2_00_Operational') || status === 'online') return 'online';
+                if (status.includes('needs_attention') || status === 'offline') return 'offline';
+                return 'unknown';
+              })(),
               model: ap.model || 'Unknown',
               serialNumber: ap.serialNumber || '',
               macAddress: ap.macAddress || '',
@@ -314,7 +319,12 @@ export class RuckusApiService {
             id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
             name: switchDevice.name || switchDevice.model || 'Unknown Switch',
             type: 'switch' as const,
-            status: switchDevice.status || 'unknown',
+            status: (() => {
+              const status = switchDevice.status || '';
+              if (status.includes('2_00_Operational') || status === 'online') return 'online';
+              if (status.includes('needs_attention') || status === 'offline') return 'offline';
+              return 'unknown';
+            })(),
             model: switchDevice.model || 'Unknown',
             serialNumber: switchDevice.serialNumber || '',
             macAddress: switchDevice.macAddress || '',
