@@ -521,7 +521,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
-        style={{ cursor: isDraggingDevice ? 'grabbing' : isDragging ? 'grabbing' : 'grab' }}
+            className={isDraggingDevice || isDragging ? 'cursor-grabbing' : 'cursor-grab'}
       >
         {/* Pan and zoom transform group */}
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
@@ -558,8 +558,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
                 x={labelX}
                 y={labelY}
                 textAnchor="middle"
-                className="text-xs fill-gray-600 pointer-events-none"
-                style={{ fontSize: '10px' }}
+                className="svg-text-small fill-gray-600 pointer-events-none"
               >
                 {link.localPort}
               </text>
@@ -585,7 +584,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
                 setDraggedDeviceId(device.id);
                 setDeviceDragStart({ x: e.clientX, y: e.clientY });
               }}
-              style={{ cursor: isDraggingDevice && draggedDeviceId === device.id ? 'grabbing' : 'grab' }}
+                  className={isDraggingDevice && draggedDeviceId === device.id ? 'cursor-grabbing' : 'cursor-grab'}
             >
               {/* Device circle background */}
               <circle
@@ -601,7 +600,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
                     onDeviceSelect(device);
                   }
                 }}
-                style={{ transition: isDraggingDevice && draggedDeviceId === device.id ? 'none' : 'all 0.2s ease' }}
+                    className={isDraggingDevice && draggedDeviceId === device.id ? 'transition-none' : 'transition-smooth'}
               />
               
               {/* Device icon */}

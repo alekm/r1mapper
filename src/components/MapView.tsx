@@ -103,7 +103,7 @@ const MapView: React.FC<MapViewProps> = ({
       <div className="map-sidebar">
         <div className="sidebar-header">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Building2 className="h-5 w-5 mr-2" style={{color: '#ff6a00'}} />
+            <Building2 className="h-5 w-5 mr-2 icon-primary" />
             Venues
           </h2>
           <p className="text-sm text-gray-500 mt-1">

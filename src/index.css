@@ -237,6 +237,34 @@
     @apply w-80 sidebar;
   }
   
+  /* Icon colors */
+  .icon-primary {
+    color: #ff6a00;
+  }
+  
+  /* Cursor states */
+  .cursor-grab {
+    cursor: grab;
+  }
+  
+  .cursor-grabbing {
+    cursor: grabbing;
+  }
+  
+  /* SVG text styling */
+  .svg-text-small {
+    font-size: 10px;
+  }
+  
+  /* Transition states */
+  .transition-none {
+    transition: none;
+  }
+  
+  .transition-smooth {
+    transition: all 0.2s ease;
+  }
+  
   /* Utility classes */
   .text-muted {
     @apply text-gray-500;
