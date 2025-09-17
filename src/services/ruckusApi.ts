@@ -509,6 +509,7 @@ export class RuckusApiService {
 
       if (venueId) {
         try {
+          // Try to get switch ports first
           const switchPorts = await this.getSwitchPorts(venueId);
           
           for (const port of switchPorts) {
@@ -535,7 +536,42 @@ export class RuckusApiService {
             }
           }
         } catch (error) {
-          console.error('RuckusApiService: Failed to fetch LLDP links:', error);
+          console.warn('RuckusApiService: Switch ports query failed, trying AP-based LLDP discovery:', error);
+          
+          // Fallback: Try AP-based LLDP discovery
+          try {
+            const aps = await this.getAPs(venueId);
+            const apsToCheck = aps.slice(0, 10); // Limit to first 10 APs to avoid too many requests
+            
+            for (const ap of apsToCheck) {
+              if (ap.serialNumber && ap.serialNumber !== 'Unknown') {
+                try {
+                  const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
+                  
+                  for (const neighbor of neighbors) {
+                    if (neighbor.neighborMacAddress && neighbor.neighborName) {
+                      const link: LLDPLink = {
+                        id: `${ap.macAddress?.toLowerCase()}-${neighbor.neighborMacAddress?.toLowerCase()}`,
+                        localDeviceId: ap.macAddress?.toLowerCase(),
+                        remoteDeviceId: neighbor.neighborMacAddress?.toLowerCase(),
+                        localPort: 'Wireless',
+                        remotePort: neighbor.neighborPort || 'Unknown',
+                        localPortDescription: 'AP Wireless Interface',
+                        remotePortDescription: neighbor.neighborName || 'Unknown Device',
+                        lastUpdated: new Date().toISOString()
+                      };
+                      
+                      allLinks.push(link);
+                    }
+                  }
+                } catch (apError) {
+                  console.warn(`RuckusApiService: Failed to get neighbors for AP ${ap.serialNumber}:`, apError);
+                }
+              }
+            }
+          } catch (fallbackError) {
+            console.error('RuckusApiService: AP-based LLDP discovery also failed:', fallbackError);
+          }
         }
       }
 
