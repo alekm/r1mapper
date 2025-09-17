@@ -48,19 +48,19 @@ export class RuckusApiService {
   }
 
   async authenticate(): Promise<void> {
-    // r1helper-style Basic flow: POST /oauth2/token, x-www-form-urlencoded body, Basic header, tenant header
-    const url = `/oauth2/token`;
+    // Match r1helper: POST /oauth2/token/{tenantId}?region=.. with Basic, form body, and accept login-token header
+    const url = `/oauth2/token/${encodeURIComponent(this.config.tenantId)}`;
     const data = new URLSearchParams({ grant_type: 'client_credentials' });
     const headers: Record<string, string> = {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': '*/*',
       'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
-      'x-rks-tenantid': this.config.tenantId,
-      'x-tenant-id': this.config.tenantId,
     };
 
-    const resp = await this.api.post(url, data, { headers });
-    const token = resp.data?.access_token;
+    const resp = await this.api.post(url, data, { headers, params: { region: this.config.region } });
+    // Some deployments return token in header
+    const headerToken = (resp.headers && (resp.headers['login-token'] || resp.headers['Login-Token'])) as string | undefined;
+    const token = headerToken || resp.data?.access_token;
     if (!token) throw new Error('Authentication failed: no access_token');
     this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
