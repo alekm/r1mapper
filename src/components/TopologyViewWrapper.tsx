@@ -277,6 +277,14 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
                       </button>
                     </div>
                   </div>
+                  <div className="mt-3">
+                    <button
+                      className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onClick={() => onFilterChange({})}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
                 </div>
               )}
 
