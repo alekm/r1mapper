@@ -46,7 +46,6 @@ function AppContent() {
         const config = JSON.parse(savedConfig);
         setApiService(new RuckusApiService(config));
       } catch (error) {
-        console.error('Failed to load saved configuration:', error);
         setShowConfig(true);
       }
     } else {
@@ -161,7 +160,6 @@ function AppContent() {
       try {
         await apiService.triggerAPRFScan(selectedVenueId, selectedDevice.serialNumber);
       } catch (error) {
-        console.error(`Failed to trigger RF scan for AP ${selectedDevice.name}:`, error);
       }
     }
   };
@@ -172,7 +170,6 @@ function AppContent() {
         const neighbors = await apiService.queryAPRFNeighbors(selectedVenueId, selectedDevice.serialNumber);
         setRfNeighbors(neighbors);
       } catch (error) {
-        console.error(`Failed to load RF neighbors for AP ${selectedDevice.name}:`, error);
         setRfNeighbors([]);
       }
     }

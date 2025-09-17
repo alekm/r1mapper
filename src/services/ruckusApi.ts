@@ -41,8 +41,6 @@ async function requestToken(
     try {
       return await res.json();
     } catch {
-      const responseText = await res.text();
-      console.error('JSON parse error: Response:', responseText.substring(0, 200));
       throw new Error(`${res.status} ${res.statusText} (invalid JSON response)`); 
     }
   }
@@ -244,7 +242,6 @@ export class RuckusApiService {
         } : undefined,
       }));
     } catch (error) {
-      console.error('RuckusApiService: Failed to fetch venues:', error);
       throw new Error('Failed to fetch venues');
     }
   }
@@ -289,7 +286,6 @@ export class RuckusApiService {
         };
       });
     } catch (error) {
-      console.error('RuckusApiService: Failed to fetch APs:', error);
       return [];
     }
   }
@@ -298,8 +294,6 @@ export class RuckusApiService {
     try {
       const response = await apiGet('regular', this.config, '/switches') as any[];
       const switches = Array.isArray(response) ? response : [];
-      // Debug: log switch count
-      console.log('RuckusApiService: switches count', switches.length);
       const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
@@ -328,13 +322,9 @@ export class RuckusApiService {
       const MAX_DETAIL = 10;
       const detailTargets = base.slice(0, MAX_DETAIL).map(s => s.id);
       const enriched = await Promise.all(
-        detailTargets.map(async (id, idx) => {
+        detailTargets.map(async (id) => {
           try {
             const detail = await apiGet('regular', this.config, `/switches/${encodeURIComponent(id)}`) as any;
-            // Debug: log detail keys for first switch only
-            if (idx === 0) {
-              console.log('RuckusApiService: switch detail keys for', id, Object.keys(detail || {}));
-            }
             return { id, detail };
           } catch (e) {
             return { id, detail: null };
@@ -372,7 +362,6 @@ export class RuckusApiService {
         return { ...sw, model, serialNumber: serial };
       });
     } catch (error) {
-      console.error('RuckusApiService: Failed to fetch switches:', error);
       return [];
     }
   }
@@ -385,7 +374,6 @@ export class RuckusApiService {
       ]);
       return [...aps, ...switches];
     } catch (error) {
-      console.error('RuckusApiService: Failed to fetch devices:', error);
       throw new Error('Failed to fetch devices');
     }
   }
@@ -400,7 +388,6 @@ export class RuckusApiService {
       const filteredLinks = links.filter(l => deviceIdSet.has(l.localDeviceId) && deviceIdSet.has(l.remoteDeviceId));
       return { devices, links: filteredLinks };
     } catch (error) {
-      console.error('RuckusApiService: Failed to fetch network topology:', error);
       throw new Error('Failed to fetch network topology from Ruckus One API');
     }
   }
@@ -436,7 +423,6 @@ export class RuckusApiService {
     
     // Extract data array from paginated response
     const ports = Array.isArray(res) ? res : (res as any)?.data || [];
-    console.log('RuckusApiService: switchPorts count:', ports.length);
     
     return ports;
   }
@@ -487,16 +473,6 @@ export class RuckusApiService {
               allLinks.push(link);
               linkCount++;
               
-              // Log first few successful links for debugging
-              if (linkCount <= 3) {
-                console.log(`RuckusApiService: created link ${linkCount}:`, {
-                  local: localDeviceMacNorm,
-                  remote: remoteDeviceMacNorm,
-                  localPort: link.localPort,
-                  remotePort: link.remotePort,
-                  neighborName: neighborName || 'none'
-                });
-              }
             } else {
               skippedCount++;
               if (!localDeviceMacNorm) skippedReasons['no local MAC'] = (skippedReasons['no local MAC'] || 0) + 1;
@@ -507,15 +483,11 @@ export class RuckusApiService {
             }
           }
           
-          // One-time log of results
-          console.log(`RuckusApiService: LLDP results - created ${linkCount} links, skipped ${skippedCount} ports:`, skippedReasons);
         }
       } catch (e) {
-        console.warn('RuckusApiService: Switch-port LLDP query failed', e);
       }
       return allLinks;
     } catch (error) {
-      console.error('RuckusApiService: Failed to get LLDP links:', error);
       return [];
     }
   }

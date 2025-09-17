@@ -49,15 +49,6 @@ exports.handler = async (event, context) => {
     // Construct the target URL
     const targetUrl = `${apiBase}${path}`;
     
-    // Debug logging
-    console.log('Proxy request:', {
-      method: event.httpMethod,
-      path: path,
-      region: region,
-      apiBase: apiBase,
-      targetUrl: targetUrl,
-      hasBody: !!event.body
-    });
     
     // Prepare headers for the upstream request
     const upstreamHeaders = {};
@@ -107,17 +98,9 @@ exports.handler = async (event, context) => {
         responseBody = await response.text();
       }
     } catch (parseError) {
-      console.error('Response parsing error:', parseError.message);
       responseBody = await response.text();
     }
 
-    // Debug logging for response
-    console.log('Proxy response:', {
-      status: response.status,
-      contentType: contentType,
-      bodyType: typeof responseBody,
-      bodyLength: typeof responseBody === 'string' ? responseBody.length : 'object'
-    });
 
     // Return the response
     return {
@@ -130,7 +113,6 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Proxy error:', error.message);
     
     return {
       statusCode: 500,

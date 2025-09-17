@@ -29,10 +29,8 @@ export default defineConfig({
                 } catch {
                   // Ignore if header doesn't exist
                 }
-                console.log('Sending Request to the Target:', proxyReq.method, proxyReq.path);
               });
               proxy.on('proxyRes', (proxyRes: any, req: any) => {
-                console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
               });
             },
           },
