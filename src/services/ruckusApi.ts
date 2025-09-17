@@ -278,7 +278,15 @@ export class RuckusApiService {
       // Get APs for the venue
       if (venueId) {
         try {
-          const apsData = await apiGet(this.config, `/venues/${venueId}/aps`) as any[];
+          // Use the correct endpoint: POST /venues/aps/query
+          const queryPayload = {
+            page: 1,
+            pageSize: 100,
+            filters: {
+              venueId: [venueId]
+            }
+          };
+          const apsData = await apiPost(this.config, '/venues/aps/query', queryPayload) as any[];
           if (Array.isArray(apsData)) {
             devices.push(...apsData.map((ap: any) => ({
               id: ap.macAddress || ap.serialNumber || ap.id || '',
