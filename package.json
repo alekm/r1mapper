@@ -2,6 +2,7 @@
   "name": "r1mapper",
   "version": "1.0.0",
   "description": "Interactive network topology mapper for Ruckus One devices and LLDP neighbors",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -19,6 +20,7 @@
     "d3": "^7.8.5",
     "leaflet": "^1.9.3",
     "lucide-react": "^0.263.1",
+    "node-fetch": "^2.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
