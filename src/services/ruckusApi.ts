@@ -1,50 +1,13 @@
-import axios, { AxiosInstance } from 'axios';
+import { apiFetch } from '../lib/apiClient';
 import { RuckusConfig, RuckusDevice, Venue, LLDPLink, RuckusRegion, RFNeighbor } from '../types';
 
-// Determine if we're in development or production
-const isDevelopment = import.meta.env.DEV;
-
-// Base URL for API calls
-function getApiBaseUrl(region: RuckusRegion): string {
-  // Handle legacy region format and convert to new format
-  let safeRegion: RuckusRegion;
-  if (region === 'api.ruckus.cloud' || region === 'na') {
-    safeRegion = 'na';
-  } else if (region === 'api.eu.ruckus.cloud' || region === 'eu') {
-    safeRegion = 'eu';
-  } else if (region === 'api.asia.ruckus.cloud' || region === 'asia') {
-    safeRegion = 'asia';
-  } else {
-    safeRegion = 'na'; // Default fallback
-  }
-  
-  if (isDevelopment) {
-    // Use Vite proxy in development
-    const proxyPaths = {
-      na: '/r1',
-      eu: '/r1-eu',
-      asia: '/r1-asia'
-    };
-    return proxyPaths[safeRegion];
-  } else {
-    // Use Netlify functions proxy in production
-    return '/api';
-  }
-}
-
 export class RuckusApiService {
-  private api: AxiosInstance;
   private config: RuckusConfig;
+  private accessToken: string | null = null;
   private rfNeighborsCache: Map<string, any[]> = new Map();
 
   constructor(config: RuckusConfig) {
     this.config = config;
-    const baseUrl = getApiBaseUrl(config.region);
-    
-    this.api = axios.create({
-      baseURL: baseUrl,
-      timeout: 30000,
-    });
   }
 
   async authenticate(): Promise<void> {
@@ -55,16 +18,36 @@ export class RuckusApiService {
       scope: 'read write',
     });
 
-    const response = await this.api.post(tokenUrl, authData, {
+    const response = await apiFetch(this.config.region, tokenUrl, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
       },
-      params: { region: this.config.region }
+      body: authData,
     });
 
-    // Store the token for future requests
-    this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    this.accessToken = data.access_token;
+  }
+
+  private async makeApiCall(path: string, options: RequestInit = {}): Promise<Response> {
+    if (!this.accessToken) {
+      throw new Error('Not authenticated. Please authenticate first.');
+    }
+
+    return apiFetch(this.config.region, path, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        ...options.headers,
+      },
+    });
   }
 
   async getVenues(): Promise<Venue[]> {
@@ -72,15 +55,20 @@ export class RuckusApiService {
       // Ensure we're authenticated first
       await this.authenticate();
       
-      const response = await this.api.get('/venues', {
-        params: { region: this.config.region }
-      });
+      const response = await this.makeApiCall('/venues');
       
-      if (!Array.isArray(response.data)) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch venues: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!Array.isArray(data)) {
         return [];
       }
 
-      return response.data.map((venue: any) => ({
+      return data.map((venue: any) => ({
         id: venue.id || venue.venueId || '',
         name: venue.name || 'Unnamed Venue',
         address: venue.address || '',
@@ -104,46 +92,48 @@ export class RuckusApiService {
       
       // Get APs for the venue
       if (venueId) {
-        const apsResponse = await this.api.get(`/venues/${venueId}/aps`, {
-          params: { region: this.config.region }
-        });
-        if (Array.isArray(apsResponse.data)) {
-          devices.push(...apsResponse.data.map((ap: any) => ({
-            id: ap.macAddress || ap.serialNumber || ap.id || '',
-            name: ap.name || ap.model || 'Unknown AP',
-            type: 'ap' as const,
-            status: ap.status || 'unknown',
-            model: ap.model || 'Unknown',
-            serialNumber: ap.serialNumber || '',
-            macAddress: ap.macAddress || '',
-            ipAddress: ap.ipAddress || '',
-            location: ap.location ? {
-              latitude: parseFloat(ap.location.latitude) || 0,
-              longitude: parseFloat(ap.location.longitude) || 0,
-            } : null,
-          })));
+        const apsResponse = await this.makeApiCall(`/venues/${venueId}/aps`);
+        if (apsResponse.ok) {
+          const apsData = await apsResponse.json();
+          if (Array.isArray(apsData)) {
+            devices.push(...apsData.map((ap: any) => ({
+              id: ap.macAddress || ap.serialNumber || ap.id || '',
+              name: ap.name || ap.model || 'Unknown AP',
+              type: 'ap' as const,
+              status: ap.status || 'unknown',
+              model: ap.model || 'Unknown',
+              serialNumber: ap.serialNumber || '',
+              macAddress: ap.macAddress || '',
+              ipAddress: ap.ipAddress || '',
+              location: ap.location ? {
+                latitude: parseFloat(ap.location.latitude) || 0,
+                longitude: parseFloat(ap.location.longitude) || 0,
+              } : null,
+            })));
+          }
         }
       }
 
       // Get switches
-      const switchesResponse = await this.api.get('/switches', {
-        params: { region: this.config.region }
-      });
-      if (Array.isArray(switchesResponse.data)) {
-        devices.push(...switchesResponse.data.map((switchDevice: any) => ({
-          id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
-          name: switchDevice.name || switchDevice.model || 'Unknown Switch',
-          type: 'switch' as const,
-          status: switchDevice.status || 'unknown',
-          model: switchDevice.model || 'Unknown',
-          serialNumber: switchDevice.serialNumber || '',
-          macAddress: switchDevice.macAddress || '',
-          ipAddress: switchDevice.ipAddress || '',
-          location: switchDevice.location ? {
-            latitude: parseFloat(switchDevice.location.latitude) || 0,
-            longitude: parseFloat(switchDevice.location.longitude) || 0,
-          } : null,
-        })));
+      const switchesResponse = await this.makeApiCall('/switches');
+      if (switchesResponse.ok) {
+        const switchesData = await switchesResponse.json();
+        if (Array.isArray(switchesData)) {
+          devices.push(...switchesData.map((switchDevice: any) => ({
+            id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
+            name: switchDevice.name || switchDevice.model || 'Unknown Switch',
+            type: 'switch' as const,
+            status: switchDevice.status || 'unknown',
+            model: switchDevice.model || 'Unknown',
+            serialNumber: switchDevice.serialNumber || '',
+            macAddress: switchDevice.macAddress || '',
+            ipAddress: switchDevice.ipAddress || '',
+            location: switchDevice.location ? {
+              latitude: parseFloat(switchDevice.location.latitude) || 0,
+              longitude: parseFloat(switchDevice.location.longitude) || 0,
+            } : null,
+          })));
+        }
       }
 
       return devices;
@@ -212,23 +202,32 @@ export class RuckusApiService {
 
     try {
       // First trigger the RF scan
-      await this.api.patch(
+      await this.makeApiCall(
         `/venues/${venueId}/aps/${serialNumber}/neighbors`,
-        { action: 'scan' },
-        { params: { region: this.config.region } }
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ action: 'scan' }),
+        }
       );
 
       // Wait a moment for the scan to complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Then query the results
-      const response = await this.api.post(
+      const response = await this.makeApiCall(
         `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
-        { action: 'query' },
-        { params: { region: this.config.region } }
+        {
+          method: 'POST',
+          body: JSON.stringify({ action: 'query' }),
+        }
       );
 
-      const neighbors: RFNeighbor[] = Array.isArray(response.data) ? response.data.map((neighbor: any) => ({
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
         rssi: neighbor.rssi || 0,
         channel: neighbor.channel || 0,
@@ -245,16 +244,20 @@ export class RuckusApiService {
 
   async getSwitchNeighbors(switchId: string): Promise<any[]> {
     try {
-      const response = await this.api.get(`/switches/${switchId}/ports`, {
-        params: { region: this.config.region }
-      });
+      const response = await this.makeApiCall(`/switches/${switchId}/ports`);
       
-      if (!Array.isArray(response.data)) {
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      
+      if (!Array.isArray(data)) {
         return [];
       }
 
       const neighbors: any[] = [];
-      response.data.forEach((port: any) => {
+      data.forEach((port: any) => {
         if (port.lldpNeighbor) {
           neighbors.push({
             localPort: port.portName || port.portId,
@@ -276,10 +279,12 @@ export class RuckusApiService {
     if (!venueId) return;
 
     try {
-      await this.api.patch(
+      await this.makeApiCall(
         `/venues/${venueId}/aps/${serialNumber}/neighbors`,
-        { action: 'scan' },
-        { params: { region: this.config.region } }
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ action: 'scan' }),
+        }
       );
     } catch (error) {
       console.error('RuckusApiService: Failed to trigger RF scan:', error);
@@ -291,13 +296,20 @@ export class RuckusApiService {
     if (!venueId) return [];
 
     try {
-      const response = await this.api.post(
+      const response = await this.makeApiCall(
         `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
-        { action: 'query' },
-        { params: { region: this.config.region } }
+        {
+          method: 'POST',
+          body: JSON.stringify({ action: 'query' }),
+        }
       );
 
-      const neighbors: RFNeighbor[] = Array.isArray(response.data) ? response.data.map((neighbor: any) => ({
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
         rssi: neighbor.rssi || 0,
         channel: neighbor.channel || 0,
