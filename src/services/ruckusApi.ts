@@ -48,36 +48,21 @@ export class RuckusApiService {
   }
 
   async authenticate(): Promise<void> {
-    const tokenUrl = `/oauth2/token/${this.config.tenantId}`;
-    
-    const authData = new URLSearchParams({
-      grant_type: 'client_credentials',
-      scope: 'read write',
-    });
+    // r1helper-style Basic flow: POST /oauth2/token, x-www-form-urlencoded body, Basic header, tenant header
+    const url = `/oauth2/token`;
+    const data = new URLSearchParams({ grant_type: 'client_credentials' });
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': '*/*',
+      'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
+      'x-rks-tenantid': this.config.tenantId,
+      'x-tenant-id': this.config.tenantId,
+    };
 
-    console.log('RuckusApiService: Authenticating with:', {
-      tokenUrl,
-      region: this.config.region,
-      tenantId: this.config.tenantId,
-      clientId: this.config.clientId
-    });
-
-    try {
-      const response = await this.api.post(tokenUrl, authData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
-        },
-        params: { region: this.config.region }
-      });
-
-      console.log('RuckusApiService: Authentication successful');
-      // Store the token for future requests
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
-    } catch (error) {
-      console.error('RuckusApiService: Authentication failed:', error);
-      throw error;
-    }
+    const resp = await this.api.post(url, data, { headers });
+    const token = resp.data?.access_token;
+    if (!token) throw new Error('Authentication failed: no access_token');
+    this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
   async getVenues(): Promise<Venue[]> {
