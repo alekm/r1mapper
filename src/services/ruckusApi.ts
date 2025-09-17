@@ -55,16 +55,29 @@ export class RuckusApiService {
       scope: 'read write',
     });
 
-    const response = await this.api.post(tokenUrl, authData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
-      },
-      params: { region: this.config.region }
+    console.log('RuckusApiService: Authenticating with:', {
+      tokenUrl,
+      region: this.config.region,
+      tenantId: this.config.tenantId,
+      clientId: this.config.clientId
     });
 
-    // Store the token for future requests
-    this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+    try {
+      const response = await this.api.post(tokenUrl, authData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
+        },
+        params: { region: this.config.region }
+      });
+
+      console.log('RuckusApiService: Authentication successful');
+      // Store the token for future requests
+      this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+    } catch (error) {
+      console.error('RuckusApiService: Authentication failed:', error);
+      throw error;
+    }
   }
 
   async getVenues(): Promise<Venue[]> {
@@ -72,11 +85,21 @@ export class RuckusApiService {
       // Ensure we're authenticated first
       await this.authenticate();
       
+      console.log('RuckusApiService: Fetching venues with region:', this.config.region);
+      
       const response = await this.api.get('/venues', {
         params: { region: this.config.region }
       });
       
+      console.log('RuckusApiService: Venues response:', {
+        status: response.status,
+        dataType: typeof response.data,
+        isArray: Array.isArray(response.data),
+        dataLength: Array.isArray(response.data) ? response.data.length : 'N/A'
+      });
+      
       if (!Array.isArray(response.data)) {
+        console.warn('RuckusApiService: Venues response is not an array:', response.data);
         return [];
       }
 
