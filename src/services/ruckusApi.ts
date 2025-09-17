@@ -318,24 +318,7 @@ export class RuckusApiService {
         };
       });
 
-      // Enrich with per-switch details to discover proper model fields, but cap for performance
-      const MAX_DETAIL = 10;
-      const detailTargets = base.slice(0, MAX_DETAIL).map(s => s.id);
-      const enriched = await Promise.all(
-        detailTargets.map(async (id) => {
-          try {
-            const detail = await apiGet('regular', this.config, `/switches/${encodeURIComponent(id)}`) as any;
-            return { id, detail };
-          } catch (e) {
-            return { id, detail: null };
-          }
-        })
-      );
-
-      const idToDetail: Record<string, any> = {};
-      for (const d of enriched) {
-        if (d && d.detail) idToDetail[d.id] = d.detail;
-      }
+      // Individual switch detail endpoint returns 404, skip enrichment
 
       // Try to enrich with switchPorts data which contains switchModel
       let portsMap: Record<string, { model?: string }> = {};
@@ -354,9 +337,8 @@ export class RuckusApiService {
       // Switch members query removed - endpoint returns 500 error
 
       return base.map(sw => {
-        const detail = idToDetail[sw.id];
         const fromPorts = portsMap[sw.id] || {};
-        const model = (detail?.model || detail?.productModel || detail?.specifiedType || fromPorts.model || sw.model);
+        const model = (fromPorts.model || sw.model);
         return { ...sw, model, serialNumber: 'N/A' }; // Switches use MAC address as identifier
       });
     } catch (error) {
