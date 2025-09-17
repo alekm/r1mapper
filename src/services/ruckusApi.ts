@@ -329,7 +329,7 @@ export class RuckusApiService {
         const ports = await this.getSwitchPorts('');
         if (Array.isArray(ports) && ports.length > 0) {
           for (const p of ports) {
-            const mac = (p.switchMac || '').toLowerCase();
+            const mac = this.normalizeMacId(p.switchMac || '');
             if (!mac) continue;
             // Use switchModel from ports data as it contains the actual hardware model
             const model = p.switchModel || portsMap[mac]?.model;
