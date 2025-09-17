@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { RuckusConfig, RuckusDevice, Venue, LLDPLink, RuckusRegion } from '../types';
+import { RuckusConfig, RuckusDevice, Venue, LLDPLink, RuckusRegion, RFNeighbor } from '../types';
 
 // Determine if we're in development or production
 const isDevelopment = import.meta.env.DEV;
@@ -27,13 +27,8 @@ function getApiBaseUrl(region: RuckusRegion): string {
     };
     return proxyPaths[safeRegion];
   } else {
-    // Use direct API URLs in production
-    const apiUrls = {
-      na: 'https://api.ruckus.cloud',
-      eu: 'https://api.eu.ruckus.cloud',
-      asia: 'https://api.asia.ruckus.cloud'
-    };
-    return apiUrls[safeRegion];
+    // Use Netlify functions proxy in production
+    return '/api';
   }
 }
 
@@ -49,580 +44,264 @@ export class RuckusApiService {
     this.api = axios.create({
       baseURL: baseUrl,
       timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    });
-
-    // Add request interceptor for authentication
-    this.api.interceptors.request.use(async (config) => {
-      await this.authenticate();
-      return config;
     });
   }
 
-  private async authenticate(): Promise<void> {
-    try {
-      const baseUrl = getApiBaseUrl(this.config.region);
-      
-      const attempts = [
-        // Method 1: Tenant-scoped endpoint with form-urlencoded
-        async () => {
-          const url = `${baseUrl}/oauth2/token/${this.config.tenantId}`;
-          const data = new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: this.config.clientId,
-            client_secret: this.config.clientSecret
-          });
-          return await axios.post(url, data, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-          });
-        },
-        // Method 2: Basic auth to tenant-scoped endpoint
-        async () => {
-          const url = `${baseUrl}/oauth2/token/${this.config.tenantId}`;
-          const auth = btoa(`${this.config.clientId}:${this.config.clientSecret}`);
-          return await axios.post(url, new URLSearchParams({ grant_type: 'client_credentials' }), {
-            headers: { 
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Authorization': `Basic ${auth}`
-            }
-          });
-        },
-        // Method 3: Standard OAuth2 endpoint
-        async () => {
-          const url = `${baseUrl}/oauth2/token`;
-          const auth = btoa(`${this.config.clientId}:${this.config.clientSecret}`);
-          return await axios.post(url, new URLSearchParams({ grant_type: 'client_credentials' }), {
-            headers: { 
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Authorization': `Basic ${auth}`
-            }
-          });
-        }
-      ];
+  async authenticate(): Promise<void> {
+    const tokenUrl = `/oauth2/token/${this.config.tenantId}`;
+    
+    const authData = new URLSearchParams({
+      grant_type: 'client_credentials',
+      scope: 'read write',
+    });
 
-      for (let i = 0; i < attempts.length; i++) {
-        try {
-          const response = await attempts[i]();
-          const token = response.data.access_token;
-          this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          return;
-        } catch (error) {
-          if (i === attempts.length - 1) {
-            throw error;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('RuckusApiService: Authentication failed:', error);
-      throw new Error('Failed to authenticate with Ruckus One API');
-    }
+    const response = await this.api.post(tokenUrl, authData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
+      },
+    });
+
+    // Store the token for future requests
+    this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
   }
 
   async getVenues(): Promise<Venue[]> {
     try {
-      const response = await this.api.get('/venues');
-      let venues = response.data.items || response.data || [];
+      const response = await this.api.get('/venues', {
+        params: { region: this.config.region }
+      });
       
-      if (!Array.isArray(venues)) {
-        venues = [];
+      if (!Array.isArray(response.data)) {
+        return [];
       }
 
-      const mappedVenues = venues.map((venue: any) => {
-        return {
-          id: venue.id,
-          name: venue.name,
-          address: venue.address?.addressLine || venue.address,
-          location: venue.address ? {
-            latitude: venue.address.latitude,
-            longitude: venue.address.longitude
-          } : undefined
-        };
-      });
-
-      return mappedVenues;
+      return response.data.map((venue: any) => ({
+        id: venue.id || venue.venueId || '',
+        name: venue.name || 'Unnamed Venue',
+        address: venue.address || '',
+        location: venue.location ? {
+          latitude: parseFloat(venue.location.latitude) || 0,
+          longitude: parseFloat(venue.location.longitude) || 0,
+        } : null,
+      }));
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch venues:', error);
-      if (axios.isAxiosError(error)) {
-        throw new Error(`Failed to fetch venues: ${error.response?.status} - ${error.response?.data?.message || error.message}`);
-      }
-      throw new Error('Failed to fetch venues from Ruckus One API');
-    }
-  }
-
-  async getAPs(venueId?: string): Promise<RuckusDevice[]> {
-    try {
-      const response = await this.api.get('/venues/aps');
-      let aps = response.data.items || response.data || [];
-      
-      if (venueId) {
-        aps = aps.filter((ap: any) => ap.venueId === venueId || ap.venue === venueId);
-      }
-      
-      return aps.map((ap: any) => {
-        const rawStatus = ap.status || ap.connectionStatus || ap.state || ap.connectionState || ap.isOnline || ap.online || ap.connected || ap.active;
-        
-        return {
-          id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase(),
-          name: ap.name || ap.hostname || 'Unknown AP',
-          type: 'ap' as const,
-          model: ap.model || ap.productModel || 'Unknown',
-          serialNumber: ap.serialNumber || 'Unknown',
-          macAddress: (ap.macAddress || ap.mac || 'Unknown')?.toLowerCase(),
-          ipAddress: ap.ipAddress || ap.ip || 'Unknown',
-          status: this.mapDeviceStatus(rawStatus),
-          location: ap.location ? {
-            latitude: ap.location.latitude,
-            longitude: ap.location.longitude,
-            address: ap.location.address
-          } : undefined,
-          lastSeen: ap.lastContacted || ap.lastSeen,
-          firmware: ap.firmware,
-          clientCount: ap.clientCount || 0,
-          venueId: ap.venueId || ap.venue || venueId
-        };
-      }) || [];
-    } catch (error) {
-      console.error('Failed to fetch APs:', error);
-      throw new Error('Failed to fetch APs from Ruckus One API');
-    }
-  }
-
-  async getSwitches(venueId?: string): Promise<RuckusDevice[]> {
-    try {
-      const endpoint = venueId ? `/venues/${venueId}/switches` : '/switches';
-      const response = await this.api.get(endpoint);
-      
-      let switches = response.data.items || response.data || [];
-      
-      return switches.map((switch_: any) => {
-        const rawStatus = switch_.status || switch_.connectionStatus || switch_.state || switch_.connectionState || switch_.isOnline || switch_.online || switch_.connected || switch_.active;
-        const finalStatus = rawStatus || (switch_.ipAddress ? 'online' : 'unknown');
-        
-        return {
-          id: (switch_.macAddress || switch_.mac || switch_.id || switch_.serialNumber || 'unknown')?.toLowerCase(),
-          name: switch_.name || switch_.hostname || 'Unknown Switch',
-          type: 'switch' as const,
-          model: switch_.model || switch_.productModel || 'Unknown',
-          serialNumber: switch_.serialNumber || switch_.id || switch_.macAddress || 'unknown',
-          macAddress: (switch_.macAddress || switch_.mac || 'Unknown')?.toLowerCase(),
-          ipAddress: switch_.ipAddress || switch_.ip || 'Unknown',
-          status: this.mapDeviceStatus(finalStatus),
-          location: switch_.location ? {
-            latitude: switch_.location.latitude,
-            longitude: switch_.location.longitude,
-            address: switch_.location.address
-          } : undefined,
-          lastSeen: switch_.lastSeen || switch_.lastUpdate || new Date().toISOString(),
-          firmwareVersion: switch_.firmwareVersion || switch_.version,
-          uptime: switch_.uptime,
-          venueId: switch_.venueId || switch_.venue || venueId
-        };
-      }) || [];
-    } catch (error) {
-      console.error('Failed to fetch switches:', error);
-      throw new Error('Failed to fetch switches from Ruckus One API');
+      throw new Error('Failed to fetch venues');
     }
   }
 
   async getDevices(venueId?: string): Promise<RuckusDevice[]> {
     try {
-      const allDevices: RuckusDevice[] = [];
+      const devices: RuckusDevice[] = [];
       
-      try {
-        const switches = await this.getSwitches(venueId);
-        allDevices.push(...switches);
-      } catch (error) {
-        // Continue if switches fail
-      }
-      
-      try {
-        const aps = await this.getAPs(venueId);
-        allDevices.push(...aps);
-      } catch (error) {
-        // Continue if APs fail
-      }
-
-      return allDevices;
-    } catch (error) {
-      console.error('Failed to fetch devices:', error);
-      throw new Error('Failed to fetch devices from Ruckus One API');
-    }
-  }
-
-  async triggerAPRFScan(venueId: string, serialNumber: string): Promise<void> {
-    try {
-      const patchBody = {
-        status: "CURRENT",
-        type: "RF_NEIGHBOR"
-      };
-      
-      await this.api.patch(`/venues/${venueId}/aps/${serialNumber}/neighbors`, patchBody);
-    } catch (error) {
-      console.error('Failed to trigger RF scan:', error.response?.data?.message || error.message);
-      throw error;
-    }
-  }
-
-  async queryAPRFNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    try {
-      const queryBody = {
-        page: 1,
-        pageSize: 100,
-        filters: [
-          {
-            type: "RF_NEIGHBOR"
-          }
-        ]
-      };
-      
-      const queryResponse = await this.api.post(`/venues/${venueId}/aps/${serialNumber}/neighbors/query`, queryBody);
-      const rawNeighbors = queryResponse.data?.neighbors || queryResponse.data?.items || [];
-      
-      // Map the API response to our expected format
-      const neighbors = rawNeighbors.map((neighbor: any, index: number) => {
-        // Determine the best channel and SNR to display
-        let bestChannel = '-';
-        let bestSnr = '-';
-        let band = '-';
-        
-        // Prefer 5GHz, then 6GHz, then 2.4GHz
-        if (neighbor.channel5G && neighbor.snr5G) {
-          bestChannel = neighbor.channel5G;
-          bestSnr = neighbor.snr5G;
-          band = '5GHz';
-        } else if (neighbor.channel6G && neighbor.snr6G) {
-          bestChannel = neighbor.channel6G;
-          bestSnr = neighbor.snr6G;
-          band = '6GHz';
-        } else if (neighbor.channel24G && neighbor.snr24G) {
-          bestChannel = neighbor.channel24G;
-          bestSnr = neighbor.snr24G;
-          band = '2.4GHz';
-        }
-        
-        return {
-          id: neighbor.apMac || `neighbor-${index}`,
-          name: neighbor.deviceName || 'Unknown',
-          macAddress: neighbor.apMac,
-          channel: bestChannel,
-          rssi: bestSnr,
-          signalStrength: bestSnr,
-          band: band,
-          model: neighbor.model,
-          ip: neighbor.ip,
-          status: neighbor.status,
-          detectedTime: neighbor.detectedTime,
-          venueName: neighbor.venueName
-        };
-      });
-      
-      return neighbors;
-    } catch (error) {
-      console.error('Failed to query RF neighbors:', error.response?.data?.message || error.message);
-      return [];
-    }
-  }
-
-  async getAPRFNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    try {
-      const cacheKey = `${venueId}-${serialNumber}`;
-      
-      if (this.rfNeighborsCache.has(cacheKey)) {
-        return this.rfNeighborsCache.get(cacheKey)!;
-      }
-      
-      // Try to trigger collection first
-      try {
-        const patchBody = {
-          status: "CURRENT",
-          type: "RF_NEIGHBOR"
-        };
-        
-        await this.api.patch(`/venues/${venueId}/aps/${serialNumber}/neighbors`, patchBody);
-        
-        // Wait for collection
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Query the results
-        const queryBody = {
-          page: 1,
-          pageSize: 100,
-          filters: [
-            {
-              type: "RF_NEIGHBOR"
-            }
-          ]
-        };
-        
-        const queryResponse = await this.api.post(`/venues/${venueId}/aps/${serialNumber}/neighbors/query`, queryBody);
-        const neighbors = queryResponse.data?.neighbors || queryResponse.data?.items || [];
-        
-        this.rfNeighborsCache.set(cacheKey, neighbors);
-        return neighbors;
-        
-      } catch (error) {
-        // Fallback: try to get neighbors from AP details
-        try {
-          const apResponse = await this.api.get(`/venues/${venueId}/aps/${serialNumber}`);
-          if (apResponse.data.neighbors) {
-            const neighbors = Array.isArray(apResponse.data.neighbors) ? apResponse.data.neighbors : [];
-            this.rfNeighborsCache.set(cacheKey, neighbors);
-            return neighbors;
-          }
-        } catch (apError) {
-          // Ignore fallback errors
-        }
-      }
-      
-      const result: any[] = [];
-      this.rfNeighborsCache.set(cacheKey, result);
-      return result;
-    } catch (error) {
-      console.error(`Failed to fetch RF neighbors for AP ${serialNumber}:`, error);
-      return [];
-    }
-  }
-
-  async getAPNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    try {
-      // Try to trigger neighbor collection first
-      try {
-        const triggerResponse = await this.api.patch(`/venues/${venueId}/aps/${serialNumber}/neighbors`, {
-          status: "CURRENT",
-          type: "LLDP_NEIGHBOR"
-        });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (triggerError) {
-        // Continue if trigger fails
-      }
-      
-      // Query existing neighbor data
-      const requestBody = {
-        filters: [
-          {
-            type: "LLDP_NEIGHBOR"
-          }
-        ],
-        page: 1,
-        pageSize: 100
-      };
-      
-      let response;
-      try {
-        response = await this.api.get(`/venues/${venueId}/aps/${serialNumber}/neighbors`);
-      } catch (getError) {
-        try {
-          response = await this.api.get(`/aps/${serialNumber}/neighbors`);
-        } catch (getError2) {
-          response = await this.api.post(`/venues/${venueId}/aps/${serialNumber}/neighbors/query`, requestBody, {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-      }
-      
-      let neighbors = [];
-      if (response.data.neighbors) {
-        neighbors = response.data.neighbors;
-      } else if (response.data.items) {
-        neighbors = response.data.items;
-      } else if (Array.isArray(response.data)) {
-        neighbors = response.data;
-      }
-      
-      return neighbors;
-    } catch (error) {
-      console.error(`Failed to fetch neighbors for AP ${serialNumber}:`, error);
-      return [];
-    }
-  }
-
-  async getSwitchNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    try {
-      // Try to trigger neighbor collection first
-      try {
-        const triggerResponse = await this.api.patch(`/venues/${venueId}/switches/${serialNumber}/neighbors`, {
-          status: "CURRENT",
-          type: "LLDP_NEIGHBOR"
-        });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (triggerError) {
-        // Continue if trigger fails
-      }
-      
-      // Query existing neighbor data
-      const requestBody = {
-        filters: [
-          {
-            type: "LLDP_NEIGHBOR"
-          }
-        ],
-        page: 1,
-        pageSize: 100
-      };
-      
-      let response;
-      try {
-        response = await this.api.get(`/venues/${venueId}/switches/${serialNumber}/neighbors`);
-      } catch (getError) {
-        try {
-          response = await this.api.get(`/switches/${serialNumber}/neighbors`);
-        } catch (getError2) {
-          response = await this.api.post(`/venues/${venueId}/switches/${serialNumber}/neighbors/query`, requestBody, {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-      }
-      
-      let neighbors = [];
-      if (response.data.neighbors) {
-        neighbors = response.data.neighbors;
-      } else if (response.data.items) {
-        neighbors = response.data.items;
-      } else if (Array.isArray(response.data)) {
-        neighbors = response.data;
-      }
-      
-      return neighbors;
-    } catch (error) {
-      console.error(`Failed to fetch neighbors for switch ${serialNumber}:`, error);
-      return [];
-    }
-  }
-
-  async getSwitchPorts(venueId: string): Promise<any[]> {
-    try {
-      const requestBody = {
-        page: 1,
-        pageSize: 1000
-      };
-      
-      const response = await this.api.post('/venues/switches/switchPorts/query', requestBody);
-      return response.data.items || response.data || [];
-    } catch (error) {
-      console.error('Failed to fetch switch ports:', error);
-      return [];
-    }
-  }
-
-  async getLLDPLinks(venueId?: string): Promise<LLDPLink[]> {
-    try {
-      const allLinks: LLDPLink[] = [];
-
+      // Get APs for the venue
       if (venueId) {
-        try {
-          const switchPorts = await this.getSwitchPorts(venueId);
-          
-          for (const port of switchPorts) {
-            const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
-            const neighborMac = port.neighborMacAddress || port.neighborMac || port.chassisId || port.remoteChassisId || port.lldpNeighborMac;
-            const neighborPort = port.remotePortId || port.portId || port.neighborPortMacAddress || port.neighborPortMac;
-            
-            if (neighborName && neighborMac) {
-              const localDeviceMac = (port.switchMac || port.portMac || port.deviceMac)?.toLowerCase();
-              const remoteDeviceMac = neighborMac?.toLowerCase();
-              
-              const link: LLDPLink = {
-                id: `${localDeviceMac}-${port.portIdentifier || port.portId}-${remoteDeviceMac}`,
-                localDeviceId: localDeviceMac,
-                remoteDeviceId: remoteDeviceMac,
-                localPort: port.portIdentifier || port.portId || 'Unknown',
-                remotePort: neighborPort || 'Unknown',
-                localPortDescription: port.name || port.tags || 'Switch Port',
-                remotePortDescription: neighborName || 'Unknown Device',
-                lastUpdated: new Date().toISOString()
-              };
-              
-              allLinks.push(link);
-            }
-          }
-        } catch (error) {
-          // Fallback: Try AP-based LLDP discovery
-          try {
-            const aps = await this.getAPs(venueId);
-            const apsToCheck = aps.slice(0, 10);
-            
-            for (const ap of apsToCheck) {
-              if (ap.serialNumber && ap.serialNumber !== 'Unknown') {
-                try {
-                  const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
-                  
-                  for (const neighbor of neighbors) {
-                    if (neighbor.neighborMacAddress && neighbor.neighborName) {
-                      const link: LLDPLink = {
-                        id: `${ap.macAddress?.toLowerCase()}-${neighbor.neighborMacAddress?.toLowerCase()}`,
-                        localDeviceId: ap.macAddress?.toLowerCase(),
-                        remoteDeviceId: neighbor.neighborMacAddress?.toLowerCase(),
-                        localPort: 'Wireless',
-                        remotePort: neighbor.neighborPort || 'Unknown',
-                        localPortDescription: 'AP Wireless Interface',
-                        remotePortDescription: neighbor.neighborName || 'Unknown Device',
-                        lastUpdated: new Date().toISOString()
-                      };
-                      
-                      allLinks.push(link);
-                    }
-                  }
-                } catch (neighborError) {
-                  // Continue if neighbor discovery fails for this AP
-                }
-              }
-            }
-          } catch (apError) {
-            // Continue if AP discovery fails
-          }
+        const apsResponse = await this.api.get(`/venues/${venueId}/aps`, {
+          params: { region: this.config.region }
+        });
+        if (Array.isArray(apsResponse.data)) {
+          devices.push(...apsResponse.data.map((ap: any) => ({
+            id: ap.macAddress || ap.serialNumber || ap.id || '',
+            name: ap.name || ap.model || 'Unknown AP',
+            type: 'ap' as const,
+            status: ap.status || 'unknown',
+            model: ap.model || 'Unknown',
+            serialNumber: ap.serialNumber || '',
+            macAddress: ap.macAddress || '',
+            ipAddress: ap.ipAddress || '',
+            location: ap.location ? {
+              latitude: parseFloat(ap.location.latitude) || 0,
+              longitude: parseFloat(ap.location.longitude) || 0,
+            } : null,
+          })));
         }
       }
 
-      return allLinks;
+      // Get switches
+      const switchesResponse = await this.api.get('/switches', {
+        params: { region: this.config.region }
+      });
+      if (Array.isArray(switchesResponse.data)) {
+        devices.push(...switchesResponse.data.map((switchDevice: any) => ({
+          id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
+          name: switchDevice.name || switchDevice.model || 'Unknown Switch',
+          type: 'switch' as const,
+          status: switchDevice.status || 'unknown',
+          model: switchDevice.model || 'Unknown',
+          serialNumber: switchDevice.serialNumber || '',
+          macAddress: switchDevice.macAddress || '',
+          ipAddress: switchDevice.ipAddress || '',
+          location: switchDevice.location ? {
+            latitude: parseFloat(switchDevice.location.latitude) || 0,
+            longitude: parseFloat(switchDevice.location.longitude) || 0,
+          } : null,
+        })));
+      }
+
+      return devices;
     } catch (error) {
-      console.error('Failed to fetch LLDP links:', error);
-      return [];
+      console.error('RuckusApiService: Failed to fetch devices:', error);
+      throw new Error('Failed to fetch devices');
     }
   }
 
   async getNetworkTopology(venueId?: string): Promise<{ devices: RuckusDevice[]; links: LLDPLink[] }> {
-    try {
-      const [devices, links] = await Promise.all([
-        this.getDevices(venueId),
-        this.getLLDPLinks(venueId)
-      ]);
+    const devices = await this.getDevices(venueId);
+    const links: LLDPLink[] = [];
 
-      return { devices, links };
+    // Get LLDP neighbors for each device
+    for (const device of devices) {
+      try {
+        if (device.type === 'ap') {
+          // For APs, get RF neighbors
+          const rfNeighbors = await this.getAPRFNeighbors(device.serialNumber, venueId);
+          rfNeighbors.forEach(neighbor => {
+            const targetDevice = devices.find(d => d.macAddress === neighbor.macAddress);
+            if (targetDevice) {
+              links.push({
+                id: `${device.id}-${targetDevice.id}`,
+                source: device.id,
+                target: targetDevice.id,
+                sourcePort: 'RF',
+                targetPort: 'RF',
+                type: 'rf',
+              });
+            }
+          });
+        } else if (device.type === 'switch') {
+          // For switches, get LLDP neighbors
+          const lldpNeighbors = await this.getSwitchNeighbors(device.id);
+          lldpNeighbors.forEach(neighbor => {
+            const targetDevice = devices.find(d => d.macAddress === neighbor.macAddress);
+            if (targetDevice) {
+              links.push({
+                id: `${device.id}-${targetDevice.id}`,
+                source: device.id,
+                target: targetDevice.id,
+                sourcePort: neighbor.localPort || 'Unknown',
+                targetPort: neighbor.remotePort || 'Unknown',
+                type: 'lldp',
+              });
+            }
+          });
+        }
+      } catch (error) {
+        // Continue with other devices if one fails
+        console.warn(`Failed to get neighbors for device ${device.id}:`, error);
+      }
+    }
+
+    return { devices, links };
+  }
+
+  async getAPRFNeighbors(serialNumber: string, venueId?: string): Promise<RFNeighbor[]> {
+    if (!venueId) return [];
+
+    const cacheKey = `${venueId}-${serialNumber}`;
+    if (this.rfNeighborsCache.has(cacheKey)) {
+      return this.rfNeighborsCache.get(cacheKey)!;
+    }
+
+    try {
+      // First trigger the RF scan
+      await this.api.patch(
+        `/venues/${venueId}/aps/${serialNumber}/neighbors`,
+        { action: 'scan' },
+        { params: { region: this.config.region } }
+      );
+
+      // Wait a moment for the scan to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Then query the results
+      const response = await this.api.post(
+        `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
+        { action: 'query' },
+        { params: { region: this.config.region } }
+      );
+
+      const neighbors: RFNeighbor[] = Array.isArray(response.data) ? response.data.map((neighbor: any) => ({
+        macAddress: neighbor.macAddress || '',
+        rssi: neighbor.rssi || 0,
+        channel: neighbor.channel || 0,
+        frequency: neighbor.frequency || 0,
+      })) : [];
+
+      this.rfNeighborsCache.set(cacheKey, neighbors);
+      return neighbors;
     } catch (error) {
-      console.error('Failed to fetch network topology:', error);
-      throw new Error('Failed to fetch network topology from Ruckus One API');
+      console.error('RuckusApiService: Failed to get RF neighbors:', error);
+      return [];
     }
   }
 
-  private mapDeviceStatus(status: any): 'online' | 'offline' | 'unknown' {
-    if (!status) return 'unknown';
-    
-    if (typeof status === 'boolean') {
-      return status ? 'online' : 'offline';
-    }
-    
-    if (typeof status === 'number') {
-      return status > 0 ? 'online' : 'offline';
-    }
-    
-    if (typeof status === 'string') {
-      const lowerStatus = status.toLowerCase();
-      if (lowerStatus.includes('online') || lowerStatus.includes('operational') || lowerStatus.includes('up') || lowerStatus.includes('active')) {
-        return 'online';
+  async getSwitchNeighbors(switchId: string): Promise<any[]> {
+    try {
+      const response = await this.api.get(`/switches/${switchId}/ports`, {
+        params: { region: this.config.region }
+      });
+      
+      if (!Array.isArray(response.data)) {
+        return [];
       }
-      if (lowerStatus.includes('offline') || lowerStatus.includes('down') || lowerStatus.includes('inactive') || lowerStatus.includes('requiresattention') || lowerStatus.includes('disconnectedfromcloud')) {
-        return 'offline';
-      }
+
+      const neighbors: any[] = [];
+      response.data.forEach((port: any) => {
+        if (port.lldpNeighbor) {
+          neighbors.push({
+            localPort: port.portName || port.portId,
+            remotePort: port.lldpNeighbor.portId || 'Unknown',
+            macAddress: port.lldpNeighbor.macAddress || '',
+            systemName: port.lldpNeighbor.systemName || '',
+          });
+        }
+      });
+
+      return neighbors;
+    } catch (error) {
+      console.error('RuckusApiService: Failed to get switch neighbors:', error);
+      return [];
     }
-    
-    return 'unknown';
+  }
+
+  async triggerAPRFScan(serialNumber: string, venueId?: string): Promise<void> {
+    if (!venueId) return;
+
+    try {
+      await this.api.patch(
+        `/venues/${venueId}/aps/${serialNumber}/neighbors`,
+        { action: 'scan' },
+        { params: { region: this.config.region } }
+      );
+    } catch (error) {
+      console.error('RuckusApiService: Failed to trigger RF scan:', error);
+      throw new Error('Failed to trigger RF scan');
+    }
+  }
+
+  async queryAPRFNeighbors(serialNumber: string, venueId?: string): Promise<RFNeighbor[]> {
+    if (!venueId) return [];
+
+    try {
+      const response = await this.api.post(
+        `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
+        { action: 'query' },
+        { params: { region: this.config.region } }
+      );
+
+      const neighbors: RFNeighbor[] = Array.isArray(response.data) ? response.data.map((neighbor: any) => ({
+        macAddress: neighbor.macAddress || '',
+        rssi: neighbor.rssi || 0,
+        channel: neighbor.channel || 0,
+        frequency: neighbor.frequency || 0,
+      })) : [];
+
+      return neighbors;
+    } catch (error) {
+      console.error('RuckusApiService: Failed to query RF neighbors:', error);
+      return [];
+    }
   }
 }
 
