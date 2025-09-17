@@ -46,12 +46,8 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Construct the target URL (forward all query params like region)
-    const qsObj = event.queryStringParameters || {};
-    const qs = Object.keys(qsObj)
-      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(qsObj[k]))}`)
-      .join('&');
-    let targetUrl = qs ? `${apiBase}${path}?${qs}` : `${apiBase}${path}`;
+    // Construct the target URL
+    const targetUrl = `${apiBase}${path}`;
     
     // Debug logging
     console.log('Proxy request:', {
@@ -89,8 +85,7 @@ exports.handler = async (event, context) => {
     // Prepare the request options
     const requestOptions = {
       method: event.httpMethod,
-      headers: upstreamHeaders,
-      redirect: 'follow'
+      headers: upstreamHeaders
     };
 
     // Add body for POST/PUT requests
@@ -98,39 +93,8 @@ exports.handler = async (event, context) => {
       requestOptions.body = event.body;
     }
 
-    // If token call, normalize to non-tenant endpoint immediately and avoid following auth redirects
-    const tokenMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
-    if (tokenMatch) {
-      const tenantIdFromPath = tokenMatch[1];
-      // Force non-tenant token endpoint; do not include query params
-      targetUrl = `${apiBase}/oauth2/token`;
-      requestOptions.method = 'POST';
-      requestOptions.redirect = 'manual';
-      requestOptions.headers['content-type'] = requestOptions.headers['content-type'] || 'application/x-www-form-urlencoded';
-      requestOptions.headers['x-rks-tenantid'] = requestOptions.headers['x-rks-tenantid'] || tenantIdFromPath;
-      requestOptions.headers['x-tenant-id'] = requestOptions.headers['x-tenant-id'] || tenantIdFromPath;
-    }
-
-    // Make the request to Ruckus One API (with token fallback like r1helper)
-    let response = await fetch(targetUrl, requestOptions);
-
-    // If this is a token call with tenant in path and upstream rejects/redirects, retry non-tenant endpoint with tenant headers
-    if (tokenMatch && response.status >= 300) {
-      const tenantIdFromPath = tokenMatch[1];
-      const fallbackUrl = `${apiBase}/oauth2/token`;
-      const fallbackHeaders = { ...requestOptions.headers };
-      // Ensure form content-type and tenant headers are present
-      fallbackHeaders['content-type'] = fallbackHeaders['content-type'] || 'application/x-www-form-urlencoded';
-      fallbackHeaders['x-rks-tenantid'] = fallbackHeaders['x-rks-tenantid'] || tenantIdFromPath;
-      fallbackHeaders['x-tenant-id'] = fallbackHeaders['x-tenant-id'] || tenantIdFromPath;
-      const fallbackInit = {
-        method: 'POST',
-        headers: fallbackHeaders,
-        body: requestOptions.body,
-        redirect: 'manual'
-      };
-      response = await fetch(fallbackUrl, fallbackInit);
-    }
+    // Make the request to Ruckus One API
+    const response = await fetch(targetUrl, requestOptions);
     
     // Get response body and handle different content types
     let responseBody;
@@ -147,19 +111,15 @@ exports.handler = async (event, context) => {
       responseBody = await response.text();
     }
 
-    // For errors, surface upstream details directly as JSON for debugging
-    if (response.status >= 400) {
-      const headersObj = {};
-      response.headers.forEach((v, k) => { headersObj[k] = v; });
-      const snippet = typeof responseBody === 'string' ? responseBody.slice(0, 2000) : JSON.stringify(responseBody).slice(0, 2000);
-      return {
-        statusCode: response.status,
-        headers: { ...headers, 'content-type': 'application/json' },
-        body: JSON.stringify({ status: response.status, headers: headersObj, body: snippet })
-      };
-    }
+    // Debug logging for response
+    console.log('Proxy response:', {
+      status: response.status,
+      contentType: contentType,
+      bodyType: typeof responseBody,
+      bodyLength: typeof responseBody === 'string' ? responseBody.length : 'object'
+    });
 
-    // Success passthrough
+    // Return the response
     return {
       statusCode: response.status,
       headers: {

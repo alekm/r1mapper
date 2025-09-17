@@ -8,7 +8,8 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
-import { RuckusDevice, LLDPLink, DeviceFilter, RuckusConfig, Venue, RFNeighbor } from './types';
+import { RuckusDevice, LLDPLink, DeviceFilter, Venue, RFNeighbor } from './types';
+import { RuckusCredentials } from './lib/ruckusApi';
 import RuckusApiService from './services/ruckusApi';
 import { DemoApiService } from './services/demoData';
 import ConfigModal from './components/ConfigModal';
@@ -123,7 +124,7 @@ function AppContent() {
     return true;
   });
 
-  const handleConfigSave = (config: RuckusConfig) => {
+  const handleConfigSave = (config: RuckusCredentials) => {
     localStorage.setItem('ruckus-config', JSON.stringify(config));
     localStorage.setItem('demo-mode', 'false');
     setDemoMode(false);

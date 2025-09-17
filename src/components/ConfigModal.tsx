@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 // Test deployment trigger
 import { X, Save, Eye, EyeOff } from 'lucide-react';
-import { RuckusConfig } from '../types';
+import { RuckusCredentials } from '../lib/ruckusApi';
 
 interface ConfigModalProps {
-  onSave: (config: RuckusConfig) => void;
+  onSave: (config: RuckusCredentials) => void;
   onDemoMode: () => void;
 }
 
 const ConfigModal: React.FC<ConfigModalProps> = ({ onSave, onDemoMode }) => {
-  const [config, setConfig] = useState<RuckusConfig>(() => {
+  const [config, setConfig] = useState<RuckusCredentials>(() => {
     // Load saved configuration from localStorage
     const savedConfig = localStorage.getItem('ruckus-config');
     if (savedConfig) {
