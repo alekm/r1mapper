@@ -28,7 +28,7 @@ export const demoDevices: RuckusDevice[] = [
     id: 'ap-001',
     name: 'Main Office AP-01',
     type: 'ap',
-    model: 'R750',
+    model: 'R850',
     serialNumber: 'SN123456789',
     macAddress: '00:11:22:33:44:55',
     ipAddress: '192.168.1.10',
@@ -47,7 +47,7 @@ export const demoDevices: RuckusDevice[] = [
     id: 'ap-002',
     name: 'Conference Room AP-02',
     type: 'ap',
-    model: 'R750',
+    model: 'R850',
     serialNumber: 'SN123456790',
     macAddress: '00:11:22:33:44:56',
     ipAddress: '192.168.1.11',
@@ -63,12 +63,31 @@ export const demoDevices: RuckusDevice[] = [
     venueId: 'venue-001'
   },
   {
+    id: 'ap-003',
+    name: 'Lobby AP-03',
+    type: 'ap',
+    model: 'R750',
+    serialNumber: 'SN123456791',
+    macAddress: '00:11:22:33:44:57',
+    ipAddress: '192.168.1.12',
+    status: 'online',
+    location: {
+      latitude: 37.7748,
+      longitude: -122.4193,
+      address: 'San Francisco, CA'
+    },
+    lastSeen: new Date().toISOString(),
+    firmwareVersion: '5.1.2.0.1234',
+    uptime: 259200, // 3 days
+    venueId: 'venue-001'
+  },
+  {
     id: 'switch-001',
     name: 'Core Switch-01',
     type: 'switch',
-    model: 'ICX 7150-C12P',
-    serialNumber: 'SN987654321',
-    macAddress: '00:AA:BB:CC:DD:EE',
+    model: 'ICX 7650-48P',
+    serialNumber: 'N/A',
+    macAddress: '00:aa:bb:cc:dd:ee',
     ipAddress: '192.168.1.1',
     status: 'online',
     location: {
@@ -79,14 +98,15 @@ export const demoDevices: RuckusDevice[] = [
     lastSeen: new Date().toISOString(),
     firmwareVersion: '08.0.95a',
     uptime: 2592000, // 30 days
+    venueId: 'venue-001'
   },
   {
     id: 'switch-002',
     name: 'Access Switch-02',
     type: 'switch',
     model: 'ICX 7150-C12P',
-    serialNumber: 'SN987654322',
-    macAddress: '00:AA:BB:CC:DD:FF',
+    serialNumber: 'N/A',
+    macAddress: '00:aa:bb:cc:dd:ff',
     ipAddress: '192.168.1.2',
     status: 'online',
     location: {
@@ -97,12 +117,13 @@ export const demoDevices: RuckusDevice[] = [
     lastSeen: new Date().toISOString(),
     firmwareVersion: '08.0.95a',
     uptime: 1209600, // 14 days
+    venueId: 'venue-001'
   },
   {
     id: 'router-001',
     name: 'Edge Router-01',
     type: 'router',
-    model: 'Ruckus FastIron',
+    model: 'FastIron SX 1600',
     serialNumber: 'SN555666777',
     macAddress: '00:FF:EE:DD:CC:BB',
     ipAddress: '192.168.1.254',
@@ -135,14 +156,14 @@ export const demoDevices: RuckusDevice[] = [
     uptime: 0,
     venueId: 'venue-001'
   },
-  // Branch Office devices (venue-002)
+  // Branch Office devices (venue-002) - Smaller, simpler equipment
   {
-    id: 'ap-003',
+    id: 'ap-004',
     name: 'Branch Office AP-01',
     type: 'ap',
-    model: 'R650',
-    serialNumber: 'SN123456791',
-    macAddress: '00:11:22:33:44:57',
+    model: 'R550',
+    serialNumber: 'SN987654321',
+    macAddress: '00:11:22:33:44:58',
     ipAddress: '192.168.2.10',
     status: 'online',
     location: {
@@ -151,15 +172,34 @@ export const demoDevices: RuckusDevice[] = [
       address: 'New York, NY'
     },
     lastSeen: new Date().toISOString(),
-    firmwareVersion: '5.1.2.0.1234',
+    firmwareVersion: '5.1.1.0.1200',
     uptime: 43200, // 12 hours
+    venueId: 'venue-002'
+  },
+  {
+    id: 'ap-005',
+    name: 'Branch Office AP-02',
+    type: 'ap',
+    model: 'R550',
+    serialNumber: 'SN987654322',
+    macAddress: '00:11:22:33:44:59',
+    ipAddress: '192.168.2.11',
+    status: 'offline',
+    location: {
+      latitude: 40.7129,
+      longitude: -74.0061,
+      address: 'New York, NY'
+    },
+    lastSeen: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+    firmwareVersion: '5.1.1.0.1200',
+    uptime: 0,
     venueId: 'venue-002'
   },
   {
     id: 'switch-003',
     name: 'Branch Switch-01',
     type: 'switch',
-    model: 'ICX 7650-48P',
+    model: 'ICX 7150-24P',
     serialNumber: 'N/A',
     macAddress: '00:aa:bb:cc:dd:ff',
     ipAddress: '192.168.2.1',
@@ -226,6 +266,17 @@ export const demoLinks: LLDPLink[] = [
     localPortDescription: 'Ethernet Port',
     remotePortDescription: 'GigabitEthernet1/1/1',
     lastUpdated: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
+  },
+  // Branch Office links (venue-002)
+  {
+    id: 'link-006',
+    localDeviceId: 'ap-004',
+    remoteDeviceId: 'switch-003',
+    localPort: 'eth0',
+    remotePort: '1/1/1',
+    localPortDescription: 'Ethernet Port',
+    remotePortDescription: 'GigabitEthernet1/1/1',
+    lastUpdated: new Date().toISOString()
   }
 ];
 
