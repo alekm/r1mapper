@@ -356,11 +356,26 @@ export class RuckusApiService {
         if (d && d.detail) idToDetail[d.id] = d.detail;
       }
 
+      // Try to enrich with switchPorts data which contains switchModel/switchSerial
+      let portsMap: Record<string, { model?: string; serial?: string }> = {};
+      try {
+        const ports = await this.getSwitchPorts('');
+        if (Array.isArray(ports)) {
+          for (const p of ports) {
+            const mac = (p.switchMac || '').toLowerCase();
+            if (!mac) continue;
+            const model = p.switchModel || portsMap[mac]?.model;
+            const serial = p.switchSerial || portsMap[mac]?.serial;
+            portsMap[mac] = { model, serial };
+          }
+        }
+      } catch {}
+
       return base.map(sw => {
         const detail = idToDetail[sw.id];
-        if (!detail) return sw;
-        const model = detail.model || detail.productModel || detail.specifiedType || sw.model;
-        const serial = detail.serialNumber || sw.serialNumber;
+        const fromPorts = portsMap[sw.id] || {};
+        const model = (detail?.model || detail?.productModel || detail?.specifiedType || fromPorts.model || sw.model);
+        const serial = (detail?.serialNumber || fromPorts.serial || sw.serialNumber);
         return { ...sw, model, serialNumber: serial };
       });
     } catch (error) {
