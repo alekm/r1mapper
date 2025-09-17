@@ -117,6 +117,7 @@ function AppContent() {
       return (
         device.name.toLowerCase().includes(searchLower) ||
         device.model.toLowerCase().includes(searchLower) ||
+        device.serialNumber.toLowerCase().includes(searchLower) ||
         device.ipAddress.toLowerCase().includes(searchLower) ||
         device.macAddress.toLowerCase().includes(searchLower)
       );

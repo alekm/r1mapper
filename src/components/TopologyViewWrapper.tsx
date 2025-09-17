@@ -83,6 +83,7 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
                     <div><span className="font-medium">Name:</span> {selectedDevice.name}</div>
                     <div><span className="font-medium">Type:</span> {selectedDevice.type.toUpperCase()}</div>
                     <div><span className="font-medium">Model:</span> {selectedDevice.model}</div>
+                    <div><span className="font-medium">Serial:</span> {selectedDevice.serialNumber}</div>
                     <div><span className="font-medium">IP:</span> {selectedDevice.ipAddress}</div>
                     <div><span className="font-medium">MAC:</span> {selectedDevice.macAddress}</div>
                     <div><span className="font-medium">Status:</span> 
