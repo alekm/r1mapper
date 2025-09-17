@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+// Use built-in fetch (available in Node.js 18+)
 
 // Regional API endpoints mapping
 const REGIONAL_ENDPOINTS = {
@@ -12,7 +12,8 @@ export default async function handler(event, context) {
     method: event.httpMethod,
     path: event.path,
     queryString: event.queryStringParameters,
-    hasBody: !!event.body
+    hasBody: !!event.body,
+    headers: event.headers
   });
 
   // Enable CORS for browser requests
