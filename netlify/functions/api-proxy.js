@@ -115,15 +115,19 @@ exports.handler = async (event, context) => {
       responseBody = await response.text();
     }
 
-    // Debug logging for response
-    console.log('Proxy response:', {
-      status: response.status,
-      contentType: contentType,
-      bodyType: typeof responseBody,
-      bodyLength: typeof responseBody === 'string' ? responseBody.length : 'object'
-    });
+    // For errors, surface upstream details directly as JSON for debugging
+    if (response.status >= 400) {
+      const headersObj = {};
+      response.headers.forEach((v, k) => { headersObj[k] = v; });
+      const snippet = typeof responseBody === 'string' ? responseBody.slice(0, 2000) : JSON.stringify(responseBody).slice(0, 2000);
+      return {
+        statusCode: response.status,
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: response.status, headers: headersObj, body: snippet })
+      };
+    }
 
-    // Return the response
+    // Success passthrough
     return {
       statusCode: response.status,
       headers: {
