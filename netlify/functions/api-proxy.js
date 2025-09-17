@@ -70,10 +70,16 @@ module.exports.handler = async (event) => {
       body = await resp.text();
     }
 
-    // Log upstream status and a short body snippet for debugging 4xx/5xx
+    // For errors, surface upstream details directly in JSON so it’s visible in the browser
     if (resp.status >= 400) {
-      const snippet = typeof body === 'string' ? body.slice(0, 300) : String(body).slice(0, 300);
-      console.log('Upstream error', { status: resp.status, contentType, snippet });
+      const headersObj = {};
+      for (const [k, v] of resp.headers) headersObj[k] = v;
+      const snippet = typeof body === 'string' ? body.slice(0, 2000) : String(body).slice(0, 2000);
+      return {
+        statusCode: resp.status,
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: resp.status, headers: headersObj, body: snippet })
+      };
     }
 
     return {
