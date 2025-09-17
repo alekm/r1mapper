@@ -295,20 +295,7 @@ export class RuckusApiService {
       const response = await apiGet('regular', this.config, '/switches') as any[];
       const switches = Array.isArray(response) ? response : [];
       
-      // Debug: log available fields for first switch to find hardware model
-      if (switches.length > 0) {
-        console.log('Switch fields available:', Object.keys(switches[0]));
-        console.log('First switch sample:', {
-          model: switches[0].model,
-          productModel: switches[0].productModel,
-          specifiedType: switches[0].specifiedType,
-          rearModule: switches[0].rearModule,
-          hardwareModel: switches[0].hardwareModel,
-          deviceModel: switches[0].deviceModel,
-          productName: switches[0].productName,
-          deviceType: switches[0].deviceType
-        });
-      }
+      // Hardware model is not available in main switch object, only in switchPorts data
       
       const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
@@ -319,7 +306,7 @@ export class RuckusApiService {
           id: idOrMac,
           name: sw.name || sw.hostname || 'Unknown Switch',
           type: 'switch' as const,
-          model: sw.model || sw.productModel || sw.specifiedType || 'Unknown',
+          model: 'Unknown', // Will be enriched from switchPorts data
           serialNumber: 'N/A', // Switches use MAC address as identifier
           macAddress: (sw.macAddress || sw.mac || sw.id || 'Unknown').toLowerCase(),
           ipAddress: sw.ipAddress || sw.ip || 'Unknown',
@@ -341,19 +328,10 @@ export class RuckusApiService {
       try {
         const ports = await this.getSwitchPorts('');
         if (Array.isArray(ports) && ports.length > 0) {
-          // Debug: log switch port fields to find hardware model
-          console.log('Switch port fields available:', Object.keys(ports[0]));
-          console.log('First port sample:', {
-            switchModel: ports[0].switchModel,
-            switchName: ports[0].switchName,
-            switchSerial: ports[0].switchSerial,
-            deviceModel: ports[0].deviceModel,
-            productModel: ports[0].productModel
-          });
-          
           for (const p of ports) {
             const mac = (p.switchMac || '').toLowerCase();
             if (!mac) continue;
+            // Use switchModel from ports data as it contains the actual hardware model
             const model = p.switchModel || portsMap[mac]?.model;
             portsMap[mac] = { model };
           }
@@ -364,7 +342,8 @@ export class RuckusApiService {
 
       return base.map(sw => {
         const fromPorts = portsMap[sw.id] || {};
-        const model = (fromPorts.model || sw.model);
+        // Use switchModel from ports data as the primary source for hardware model
+        const model = fromPorts.model || 'Unknown';
         return { ...sw, model, serialNumber: 'N/A' }; // Switches use MAC address as identifier
       });
     } catch (error) {
