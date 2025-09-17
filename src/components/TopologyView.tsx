@@ -348,6 +348,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
 
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newZoom = Math.max(0.1, Math.min(5, zoom * delta));
     setZoom(newZoom);
@@ -578,7 +579,8 @@ const TopologyView: React.FC<TopologyViewProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
-            className={isDraggingDevice || isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+        style={{ touchAction: 'none' }}
+        className={`absolute inset-0 ${isDraggingDevice || isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         {/* Pan and zoom transform group */}
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>

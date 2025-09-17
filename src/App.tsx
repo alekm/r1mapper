@@ -181,7 +181,7 @@ function AppContent() {
   }
 
   return (
-    <div className="h-full flex flex-col app-container">
+    <div className="h-screen flex flex-col app-container">
       {/* Header */}
       <header className="navbar">
         <div className="navbar-container">
