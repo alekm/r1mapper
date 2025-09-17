@@ -69,8 +69,9 @@ const handler = async (event, context) => {
 
     // Construct the target URL with forwarded query params (excluding internal 'region')
     const originalQs = event.queryStringParameters || {};
+    // Forward ALL query params, including 'region' (required by upstream to avoid redirects)
     const forwardedParams = Object.keys(originalQs)
-      .filter((key) => key !== 'region' && originalQs[key] !== undefined && originalQs[key] !== null)
+      .filter((key) => originalQs[key] !== undefined && originalQs[key] !== null)
       .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(originalQs[key]))}`)
       .join('&');
 
@@ -135,13 +136,20 @@ const handler = async (event, context) => {
     const axiosResp = await axios.request({
       method: event.httpMethod,
       url: targetUrl,
-      headers: upstreamHeaders,
+      headers: {
+        ...upstreamHeaders,
+        // Upstream sometimes expects region both in query and header. Send both.
+        'x-region': region,
+      },
       data: requestOptions.body,
       httpsAgent: new https.Agent({ keepAlive: true }),
+      maxRedirects: 0, // avoid upstream redirect loops, surface Location if any
       validateStatus: () => true, // pass through status
     });
 
     const axContentType = axiosResp.headers['content-type'] || 'application/json';
+    // If upstream sent a redirect, pass along the Location to help diagnose
+    const location = axiosResp.headers['location'];
     const axBody = typeof axiosResp.data === 'string' ? axiosResp.data : JSON.stringify(axiosResp.data);
 
     // Debug logging for response
@@ -155,7 +163,7 @@ const handler = async (event, context) => {
     // Return the response
     return {
       statusCode: axiosResp.status,
-      headers: { ...headers, 'content-type': axContentType },
+      headers: { ...headers, 'content-type': axContentType, ...(location ? { Location: location } : {}) },
       body: axBody,
     };
 
