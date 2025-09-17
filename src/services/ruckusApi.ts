@@ -461,7 +461,7 @@ export class RuckusApiService {
             const localDeviceMacNorm = normalizeMac(port.switchMac || port.portMac || port.deviceMac);
             const remoteDeviceMacNorm = normalizeMac(neighborMacRaw);
 
-            if (neighborName && localDeviceMacNorm && remoteDeviceMacNorm) {
+            if (localDeviceMacNorm && remoteDeviceMacNorm) {
               const link: LLDPLink = {
                 id: `${localDeviceMacNorm}-${port.portIdentifier || port.portId || 'p'}-${remoteDeviceMacNorm}`,
                 localDeviceId: localDeviceMacNorm,
@@ -469,13 +469,12 @@ export class RuckusApiService {
                 localPort: port.portIdentifier || port.portId || 'Unknown',
                 remotePort: neighborPort || 'Unknown',
                 localPortDescription: port.name || port.tags || 'Switch Port',
-                remotePortDescription: neighborName || 'Unknown Device',
+                remotePortDescription: neighborName || remoteDeviceMacNorm,
                 lastUpdated: new Date().toISOString(),
               };
               allLinks.push(link);
             } else {
               skippedCount++;
-              if (!neighborName) skippedReasons['no neighbor name'] = (skippedReasons['no neighbor name'] || 0) + 1;
               if (!localDeviceMacNorm) skippedReasons['no local MAC'] = (skippedReasons['no local MAC'] || 0) + 1;
               if (!remoteDeviceMacNorm) skippedReasons['no remote MAC'] = (skippedReasons['no remote MAC'] || 0) + 1;
             }
