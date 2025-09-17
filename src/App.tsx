@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Wifi, 
@@ -108,21 +108,23 @@ function AppContent() {
     }
   };
 
-  const filteredDevices = devices.filter(device => {
-    if (filter.types && filter.types.length > 0 && !filter.types.includes(device.type)) return false;
-    if (filter.statuses && filter.statuses.length > 0 && !filter.statuses.includes(device.status)) return false;
-    if (filter.search) {
-      const searchLower = filter.search.toLowerCase();
-      return (
-        device.name.toLowerCase().includes(searchLower) ||
-        device.model.toLowerCase().includes(searchLower) ||
-        device.serialNumber.toLowerCase().includes(searchLower) ||
-        device.ipAddress.toLowerCase().includes(searchLower) ||
-        device.macAddress.toLowerCase().includes(searchLower)
-      );
-    }
-    return true;
-  });
+  const filteredDevices = useMemo(() => {
+    return devices.filter(device => {
+      if (filter.types && filter.types.length > 0 && !filter.types.includes(device.type)) return false;
+      if (filter.statuses && filter.statuses.length > 0 && !filter.statuses.includes(device.status)) return false;
+      if (filter.search) {
+        const searchLower = filter.search.toLowerCase();
+        return (
+          device.name.toLowerCase().includes(searchLower) ||
+          device.model.toLowerCase().includes(searchLower) ||
+          device.serialNumber.toLowerCase().includes(searchLower) ||
+          device.ipAddress.toLowerCase().includes(searchLower) ||
+          device.macAddress.toLowerCase().includes(searchLower)
+        );
+      }
+      return true;
+    });
+  }, [devices, filter.types, filter.statuses, filter.search]);
 
   const handleConfigSave = (config: RuckusCredentials) => {
     localStorage.setItem('ruckus-config', JSON.stringify(config));
@@ -143,7 +145,10 @@ function AppContent() {
   const handleVenueSelect = (venueId: string | null) => {
     setSelectedVenueId(venueId);
     if (venueId) {
-      loadNetworkData(venueId);
+      // Defer heavy network call to yield back to the browser
+      setTimeout(() => {
+        loadNetworkData(venueId);
+      }, 0);
       // Navigate to topology view when a venue is selected
       navigate('/topology');
     }
