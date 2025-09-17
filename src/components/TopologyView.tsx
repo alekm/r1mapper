@@ -541,30 +541,28 @@ const TopologyView: React.FC<TopologyViewProps> = ({
             Save View
           </button>
           {savedViews.size > 0 && (
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  loadView(e.target.value);
-                  e.target.value = ''; // Reset selection
-                }
-              }}
-              className="text-xs border-0 bg-transparent focus:outline-none focus:ring-0"
-              defaultValue=""
-            >
-              <option value="">Load View...</option>
+            <div className="flex flex-col space-y-1">
+              <div className="text-xs text-gray-500 mb-1">Saved Views:</div>
               {Array.from(savedViews.keys()).map((viewName) => (
-                <option key={viewName} value={viewName}>
-                  {viewName}
-                </option>
+                <div key={viewName} className="flex items-center space-x-1">
+                  <button
+                    onClick={() => loadView(viewName)}
+                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex-1 text-left"
+                  >
+                    {viewName}
+                  </button>
+                  <button
+                    onClick={() => deleteView(viewName)}
+                    className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded px-1"
+                    title={`Delete view "${viewName}"`}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
-            </select>
+            </div>
           )}
         </div>
-        {savedViews.size > 0 && (
-          <div className="text-xs text-gray-500">
-            {savedViews.size} saved view{savedViews.size !== 1 ? 's' : ''}
-          </div>
-        )}
       </div>
 
       <svg
