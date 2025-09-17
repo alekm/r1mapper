@@ -419,47 +419,13 @@ export class RuckusApiService {
     }));
   }
 
-  private async getSwitchPorts(venueId: string): Promise<any[]> {
+  private async getSwitchPorts(_venueId: string): Promise<any[]> {
+    // Note: venueId kept for API scoping in future; currently not used in this query body
     const res = await apiPost(this.config, '/venues/switches/switchPorts/query', { page: 1, pageSize: 1000 });
     return Array.isArray(res) ? res : [];
   }
 
-  private async getAPNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    // Trigger LLDP neighbor collection on the AP
-    try {
-      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, {
-        status: 'CURRENT',
-        type: 'LLDP_NEIGHBOR'
-      });
-    } catch (e) {
-      // Non-fatal: continue to query existing cache if trigger fails
-      console.warn(`RuckusApiService: LLDP trigger PATCH failed for AP ${serialNumber}`, e);
-    }
-
-    // Poll for results for a short period (AP may need time to populate)
-    const queryBody = { page: 1, pageSize: 100, filters: [{ type: 'LLDP_NEIGHBOR' }] };
-    const maxAttempts = 6; // ~6-9 seconds total depending on backoff
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const res = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, queryBody);
-        const arr = Array.isArray(res) ? res : [];
-        if (arr.length > 0) {
-          return arr;
-        }
-      } catch (qErr) {
-        // Log and continue retrying
-        console.warn(`RuckusApiService: LLDP neighbors query failed (attempt ${attempt + 1}/${maxAttempts}) for AP ${serialNumber}`, qErr);
-        const msg = qErr instanceof Error ? qErr.message : String(qErr);
-        // If Ruckus API explicitly reports no neighbor data, stop retrying for this AP
-        if (msg.includes('WIFI-10498') || msg.toLowerCase().includes('no detected neighbor data') || msg.startsWith('API request failed: 400')) {
-          return [];
-        }
-      }
-      // Backoff between attempts
-      await new Promise(r => setTimeout(r, 1000 + attempt * 500));
-    }
-    return [];
-  }
+  // AP-based LLDP neighbor collection removed
 
   async getLLDPLinks(venueId?: string): Promise<LLDPLink[]> {
     try {
@@ -471,7 +437,6 @@ export class RuckusApiService {
         return mac.replace(/[^0-9a-fA-F]/g, '').toLowerCase();
       };
       // Budgets to avoid long operations on large sites
-      const MAX_APS_TO_CHECK = 20;
       const MAX_LINKS_TO_COLLECT = 200;
       const MAX_TOTAL_MS = 8000;
       const startMs = Date.now();
@@ -505,69 +470,9 @@ export class RuckusApiService {
               break;
             }
           }
-        } else {
-          // No switch-port data returned, fall back to AP-based LLDP discovery
-          console.info('RuckusApiService: No switch-port data; attempting AP-based LLDP discovery');
-          const aps = await this.getAPs(venueId);
-          const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown').slice(0, MAX_APS_TO_CHECK);
-          for (const ap of apsToCheck) {
-            const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
-            for (const neighbor of neighbors) {
-              const neighMacNorm = normalizeMac(neighbor.neighborMacAddress);
-              const apMacNorm = normalizeMac(ap.macAddress);
-              if (neighMacNorm && apMacNorm && neighbor.neighborName) {
-                const link: LLDPLink = {
-                  id: `${apMacNorm}-${neighMacNorm}`,
-                  localDeviceId: apMacNorm,
-                  remoteDeviceId: neighMacNorm,
-                  localPort: 'Wireless',
-                  remotePort: neighbor.neighborPort || 'Unknown',
-                  localPortDescription: 'AP Wireless Interface',
-                  remotePortDescription: neighbor.neighborName || 'Unknown Device',
-                  lastUpdated: new Date().toISOString(),
-                };
-                allLinks.push(link);
-              }
-              if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
-                break;
-              }
-            }
-            if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
-              break;
-            }
-          }
         }
       } catch (e) {
-        // If switch-port query hard-failed, also try AP-based LLDP discovery
-        console.warn('RuckusApiService: Switch-port LLDP query failed; falling back to AP-based LLDP discovery', e);
-        const aps = await this.getAPs(venueId);
-        const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown').slice(0, MAX_APS_TO_CHECK);
-        for (const ap of apsToCheck) {
-          const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
-          for (const neighbor of neighbors) {
-            const neighMacNorm = normalizeMac(neighbor.neighborMacAddress);
-            const apMacNorm = normalizeMac(ap.macAddress);
-            if (neighMacNorm && apMacNorm && neighbor.neighborName) {
-              const link: LLDPLink = {
-                id: `${apMacNorm}-${neighMacNorm}`,
-                localDeviceId: apMacNorm,
-                remoteDeviceId: neighMacNorm,
-                localPort: 'Wireless',
-                remotePort: neighbor.neighborPort || 'Unknown',
-                localPortDescription: 'AP Wireless Interface',
-                remotePortDescription: neighbor.neighborName || 'Unknown Device',
-                lastUpdated: new Date().toISOString(),
-              };
-              allLinks.push(link);
-            }
-            if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
-              break;
-            }
-          }
-          if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
-            break;
-          }
-        }
+        console.warn('RuckusApiService: Switch-port LLDP query failed', e);
       }
       return allLinks;
     } catch (error) {
