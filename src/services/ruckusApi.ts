@@ -261,25 +261,6 @@ export class RuckusApiService {
           ap.connected ??
           ap.active;
 
-        // Debug log for AP status troubleshooting
-        console.log('AP Debug:', {
-          name: ap.name || ap.hostname,
-          serialNumber: ap.serialNumber,
-          macAddress: ap.macAddress || ap.mac,
-          rawStatus,
-          allStatusFields: {
-            status: ap.status,
-            connectionStatus: ap.connectionStatus,
-            state: ap.state,
-            connectionState: ap.connectionState,
-            isOnline: ap.isOnline,
-            online: ap.online,
-            connected: ap.connected,
-            active: ap.active
-          },
-          mappedStatus: this.mapDeviceStatus(rawStatus)
-        });
-
         return {
           id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || '',
           name: ap.name || ap.hostname || 'Unknown AP',
