@@ -169,6 +169,35 @@ const handler = async (event, context) => {
       });
     }
 
+    // Special case: OAuth token path redirected to authorization (auth-code)
+    // Fallback to non-tenant token endpoint with tenant header
+    if (
+      axiosResp.status >= 300 && axiosResp.status < 400 &&
+      axiosResp.headers && axiosResp.headers.location &&
+      /\/oauth2\/authorization\//i.test(axiosResp.headers.location) &&
+      /\/oauth2\/token\//i.test(path)
+    ) {
+      const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/);
+      const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
+      console.log('Fallback: retrying token without tenant path, with tenant header', {
+        tenantIdFromPath
+      });
+      const tokenUrlNoTenant = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
+      axiosResp = await axios.request({
+        method: 'POST',
+        url: tokenUrlNoTenant,
+        headers: {
+          ...upstreamHeaders,
+          'x-region': region,
+          ...(tenantIdFromPath ? { 'x-rks-tenantid': tenantIdFromPath, 'x-tenant-id': tenantIdFromPath } : {}),
+        },
+        data: requestOptions.body,
+        httpsAgent: new https.Agent({ keepAlive: true }),
+        maxRedirects: 0,
+        validateStatus: () => true,
+      });
+    }
+
     const axContentType = axiosResp.headers['content-type'] || 'application/json';
     // If upstream sent a redirect, pass along the Location to help diagnose
     const location = axiosResp.headers['location'];
