@@ -398,4 +398,42 @@
   .bg-muted {
     @apply bg-gray-50;
   }
+
+  /* Footer Styles - r1helper inspired */
+  .footer {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin-top: auto;
+  }
+
+  .footer-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .footer-text {
+    color: #6b7280;
+    font-size: 0.875rem;
+    text-align: center;
+    margin: 0;
+  }
+
+  .footer-link {
+    color: #ff6a00;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+  }
+
+  .footer-link:hover {
+    color: #ff8f1c;
+  }
 }

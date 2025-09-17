@@ -6,7 +6,8 @@ import {
   RefreshCw, 
   Settings,
   AlertCircle,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import { RuckusDevice, LLDPLink, DeviceFilter, Venue, RFNeighbor } from './types';
 import { RuckusCredentials } from './lib/ruckusApi';
@@ -15,6 +16,8 @@ import { DemoApiService } from './services/demoData';
 import ConfigModal from './components/ConfigModal';
 import MapView from './components/MapView';
 import TopologyViewWrapper from './components/TopologyViewWrapper';
+import AboutPage from './components/AboutPage';
+import { Footer } from './components/Footer';
 import { clsx } from 'clsx';
 
 function AppContent() {
@@ -253,6 +256,16 @@ function AppContent() {
               <Wifi className="h-4 w-4" />
               <span>Topology</span>
             </button>
+            <button
+              onClick={() => navigate('/about')}
+              className={clsx(
+                'nav-link',
+                location.pathname === '/about' && 'active'
+              )}
+            >
+              <Info className="h-4 w-4" />
+              <span>About</span>
+            </button>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -356,6 +369,10 @@ function AppContent() {
                 onFilterChange={setFilter}
               />
             } 
+          />
+          <Route 
+            path="/about" 
+            element={<AboutPage />} 
           />
         </Routes>
       </div>
