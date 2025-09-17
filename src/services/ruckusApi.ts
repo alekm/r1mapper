@@ -1,9 +1,233 @@
 import { apiFetch } from '../lib/apiClient';
 import { RuckusConfig, RuckusDevice, Venue, LLDPLink, RuckusRegion, RFNeighbor } from '../types';
 
+const TOKEN_COOKIE_PREFIX = 'r1tk_';
+
+// Default to North America if no region specified
+const DEFAULT_REGION: RuckusRegion = 'na';
+
+function cookieKey(config: RuckusConfig): string {
+  const region = config.region || DEFAULT_REGION;
+  return `${TOKEN_COOKIE_PREFIX}${encodeURIComponent(config.tenantId)}_${encodeURIComponent(config.clientId)}_${region}`;
+}
+
+function setCookie(name: string, value: string, maxAgeSeconds: number) {
+  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}; Path=/; SameSite=Lax`;
+}
+
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function requestToken(
+  path: string,
+  body: URLSearchParams,
+  headers: Record<string, string>,
+  region: RuckusRegion
+): Promise<{ access_token: string; expires_in?: number }> {
+  const res = await apiFetch(region, path, {
+    method: 'POST',
+    headers,
+    body,
+  });
+  
+  // Some deployments return the token in a header (login-token) with empty body
+  const headerToken = res.headers.get('login-token') || res.headers.get('Login-Token');
+  if (res.ok) {
+    if (headerToken) {
+      return { access_token: headerToken };
+    }
+    try {
+      return await res.json();
+    } catch {
+      // Try to get response as text for debugging
+      const responseText = await res.text();
+      console.error('JSON parse error: Response:', responseText.substring(0, 200));
+      throw new Error(`${res.status} ${res.statusText} (invalid JSON response)`);
+    }
+  }
+  
+  // Handle error responses
+  let detail = '';
+  try { 
+    const errorResponse = await res.json();
+    detail = JSON.stringify(errorResponse);
+  } catch {
+    // If JSON parsing fails, try to get as text
+    try {
+      const errorText = await res.text();
+      detail = errorText.substring(0, 200); // Limit length for error message
+    } catch {
+      detail = 'Unable to parse error response';
+    }
+  }
+  
+  // Simplify authentication error messages
+  if (res.status === 500 && detail.includes('maximum redirect reached')) {
+    throw new Error('Authentication failed - please check your credentials');
+  }
+  
+  throw new Error(`${res.status} ${res.statusText}${detail ? ` - ${detail}` : ''}`);
+}
+
+export async function getAccessToken(config: RuckusConfig): Promise<string> {
+  const key = cookieKey(config);
+  const fromCookie = getCookie(key);
+  if (fromCookie) {
+    return fromCookie;
+  }
+
+  const region = config.region || DEFAULT_REGION;
+
+  // Use the tenant-scoped endpoint as the single source of truth
+  const attempts: Array<() => Promise<{ access_token: string; expires_in?: number }>> = [
+    // Preferred: client_id/client_secret in x-www-form-urlencoded body (per Postman flow)
+    () => requestToken(
+      `/oauth2/token/${encodeURIComponent(config.tenantId)}`,
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
+      {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      region
+    ),
+    // Fallback: Basic auth to the same tenant-scoped path (some deployments allow this)
+    () => requestToken(
+      `/oauth2/token/${encodeURIComponent(config.tenantId)}`,
+      new URLSearchParams({ grant_type: 'client_credentials' }),
+      {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: 'Basic ' + btoa(`${config.clientId}:${config.clientSecret}`),
+      },
+      region
+    ),
+    // Alternative: Standard OAuth2 endpoint without tenant in path
+    () => requestToken(
+      `/oauth2/token`,
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
+      {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      region
+    ),
+  ];
+
+  let lastErr: unknown;
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    try {
+      const data = await attempt();
+      const token = data.access_token;
+      const expiresIn = Math.max(60, Number(data.expires_in) || 3600);
+      
+      setCookie(key, token, expiresIn - 30);
+      return token;
+    } catch (e) {
+      lastErr = e;
+      continue;
+    }
+  }
+  
+  // Simplify token request error messages
+  if (lastErr instanceof Error) {
+    if (lastErr.message.includes('maximum redirect reached')) {
+      throw new Error('Authentication failed - please check your credentials');
+    }
+    if (lastErr.message.includes('500')) {
+      throw new Error('Authentication failed - please check your credentials');
+    }
+    throw new Error(`Authentication failed: ${lastErr.message}`);
+  }
+  throw new Error('Authentication failed - unknown error');
+}
+
+export async function apiGet(config: RuckusConfig, resourcePath: string): Promise<unknown> {
+  const token = await getAccessToken(config);
+  const region = config.region || DEFAULT_REGION;
+  
+  const res = await apiFetch(region, resourcePath, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: '*/*',
+    },
+  });
+  
+  if (!res.ok) {
+    let detail = '';
+    try { 
+      detail = JSON.stringify(await res.json());
+    } catch {
+      // Ignore JSON parsing errors for error details
+    }
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` - ${detail}` : ''}`);
+  }
+  
+  return await res.json();
+}
+
+export async function apiPost(config: RuckusConfig, resourcePath: string, body?: any): Promise<unknown> {
+  const token = await getAccessToken(config);
+  const region = config.region || DEFAULT_REGION;
+  
+  const res = await apiFetch(region, resourcePath, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: '*/*',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  
+  if (!res.ok) {
+    let detail = '';
+    try { 
+      detail = JSON.stringify(await res.json());
+    } catch {
+      // Ignore JSON parsing errors for error details
+    }
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` - ${detail}` : ''}`);
+  }
+  
+  return await res.json();
+}
+
+export async function apiPatch(config: RuckusConfig, resourcePath: string, body?: any): Promise<unknown> {
+  const token = await getAccessToken(config);
+  const region = config.region || DEFAULT_REGION;
+  
+  const res = await apiFetch(region, resourcePath, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: '*/*',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  
+  if (!res.ok) {
+    let detail = '';
+    try { 
+      detail = JSON.stringify(await res.json());
+    } catch {
+      // Ignore JSON parsing errors for error details
+    }
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` - ${detail}` : ''}`);
+  }
+  
+  return await res.json();
+}
+
+// Legacy class-based API service for backward compatibility
 export class RuckusApiService {
   private config: RuckusConfig;
-  private accessToken: string | null = null;
   private rfNeighborsCache: Map<string, any[]> = new Map();
 
   constructor(config: RuckusConfig) {
@@ -11,106 +235,13 @@ export class RuckusApiService {
   }
 
   async authenticate(): Promise<void> {
-    const tokenUrl = `/oauth2/token/${encodeURIComponent(this.config.tenantId)}`;
-    
-    // Try multiple authentication methods like r1helper.com
-    const attempts = [
-      // Method 1: client_id/client_secret in form body (preferred)
-      async () => {
-        const authData = new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: this.config.clientId,
-          client_secret: this.config.clientSecret,
-        });
-
-        return apiFetch(this.config.region, tokenUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: authData,
-        });
-      },
-      // Method 2: Basic auth (fallback)
-      async () => {
-        const authData = new URLSearchParams({
-          grant_type: 'client_credentials',
-        });
-
-        return apiFetch(this.config.region, tokenUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
-          },
-          body: authData,
-        });
-      }
-    ];
-
-    let lastError: Error | null = null;
-
-    for (const attempt of attempts) {
-      try {
-        const response = await attempt();
-        
-        if (response.ok) {
-          const data = await response.json();
-          this.accessToken = data.access_token;
-          return; // Success!
-        }
-
-        // If not successful, try next method
-        let errorText = '';
-        try {
-          errorText = await response.text();
-        } catch {
-          errorText = 'Unable to parse error response';
-        }
-        
-        lastError = new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
-      } catch (error) {
-        lastError = error as Error;
-      }
-    }
-
-    // If all attempts failed, throw the last error
-    if (lastError) {
-      // Handle specific authentication errors
-      if (lastError.message.includes('maximum redirect reached')) {
-        throw new Error('Authentication failed - please check your credentials');
-      }
-      throw lastError;
-    }
-  }
-
-  private async makeApiCall(path: string, options: RequestInit = {}): Promise<Response> {
-    if (!this.accessToken) {
-      throw new Error('Not authenticated. Please authenticate first.');
-    }
-
-    return apiFetch(this.config.region, path, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        ...options.headers,
-      },
-    });
+    // This is now handled by getAccessToken
+    await getAccessToken(this.config);
   }
 
   async getVenues(): Promise<Venue[]> {
     try {
-      // Ensure we're authenticated first
-      await this.authenticate();
-      
-      const response = await this.makeApiCall('/venues');
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch venues: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
+      const data = await apiGet(this.config, '/venues') as any[];
       
       if (!Array.isArray(data)) {
         return [];
@@ -133,16 +264,12 @@ export class RuckusApiService {
 
   async getDevices(venueId?: string): Promise<RuckusDevice[]> {
     try {
-      // Ensure we're authenticated first
-      await this.authenticate();
-      
       const devices: RuckusDevice[] = [];
       
       // Get APs for the venue
       if (venueId) {
-        const apsResponse = await this.makeApiCall(`/venues/${venueId}/aps`);
-        if (apsResponse.ok) {
-          const apsData = await apsResponse.json();
+        try {
+          const apsData = await apiGet(this.config, `/venues/${venueId}/aps`) as any[];
           if (Array.isArray(apsData)) {
             devices.push(...apsData.map((ap: any) => ({
               id: ap.macAddress || ap.serialNumber || ap.id || '',
@@ -159,13 +286,14 @@ export class RuckusApiService {
               } : null,
             })));
           }
+        } catch (error) {
+          console.warn('Failed to fetch APs for venue:', error);
         }
       }
 
       // Get switches
-      const switchesResponse = await this.makeApiCall('/switches');
-      if (switchesResponse.ok) {
-        const switchesData = await switchesResponse.json();
+      try {
+        const switchesData = await apiGet(this.config, '/switches') as any[];
         if (Array.isArray(switchesData)) {
           devices.push(...switchesData.map((switchDevice: any) => ({
             id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
@@ -182,6 +310,8 @@ export class RuckusApiService {
             } : null,
           })));
         }
+      } catch (error) {
+        console.warn('Failed to fetch switches:', error);
       }
 
       return devices;
@@ -250,31 +380,14 @@ export class RuckusApiService {
 
     try {
       // First trigger the RF scan
-      await this.makeApiCall(
-        `/venues/${venueId}/aps/${serialNumber}/neighbors`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ action: 'scan' }),
-        }
-      );
+      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { action: 'scan' });
 
       // Wait a moment for the scan to complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Then query the results
-      const response = await this.makeApiCall(
-        `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ action: 'query' }),
-        }
-      );
+      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { action: 'query' }) as any[];
 
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json();
       const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
         rssi: neighbor.rssi || 0,
@@ -292,13 +405,7 @@ export class RuckusApiService {
 
   async getSwitchNeighbors(switchId: string): Promise<any[]> {
     try {
-      const response = await this.makeApiCall(`/switches/${switchId}/ports`);
-      
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json();
+      const data = await apiGet(this.config, `/switches/${switchId}/ports`) as any[];
       
       if (!Array.isArray(data)) {
         return [];
@@ -327,13 +434,7 @@ export class RuckusApiService {
     if (!venueId) return;
 
     try {
-      await this.makeApiCall(
-        `/venues/${venueId}/aps/${serialNumber}/neighbors`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ action: 'scan' }),
-        }
-      );
+      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { action: 'scan' });
     } catch (error) {
       console.error('RuckusApiService: Failed to trigger RF scan:', error);
       throw new Error('Failed to trigger RF scan');
@@ -344,19 +445,8 @@ export class RuckusApiService {
     if (!venueId) return [];
 
     try {
-      const response = await this.makeApiCall(
-        `/venues/${venueId}/aps/${serialNumber}/neighbors/query`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ action: 'query' }),
-        }
-      );
+      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { action: 'query' }) as any[];
 
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json();
       const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
         rssi: neighbor.rssi || 0,
