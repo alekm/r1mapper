@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+// Use built-in fetch available in Node 18+
 
 // Regional API endpoints mapping
 const REGIONAL_ENDPOINTS = {
