@@ -97,8 +97,27 @@ exports.handler = async (event, context) => {
       requestOptions.body = event.body;
     }
 
-    // Make the request to Ruckus One API
-    const response = await fetch(targetUrl, requestOptions);
+    // Make the request to Ruckus One API (with token fallback like r1helper)
+    let response = await fetch(targetUrl, requestOptions);
+
+    // If this is a token call with tenant in path and upstream rejects/redirects, retry non-tenant endpoint with tenant headers
+    const tokenMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
+    if (tokenMatch && response.status >= 300) {
+      const tenantIdFromPath = tokenMatch[1];
+      const fallbackUrl = `${apiBase}/oauth2/token`;
+      const fallbackHeaders = { ...requestOptions.headers };
+      // Ensure form content-type and tenant headers are present
+      fallbackHeaders['content-type'] = fallbackHeaders['content-type'] || 'application/x-www-form-urlencoded';
+      fallbackHeaders['x-rks-tenantid'] = fallbackHeaders['x-rks-tenantid'] || tenantIdFromPath;
+      fallbackHeaders['x-tenant-id'] = fallbackHeaders['x-tenant-id'] || tenantIdFromPath;
+      const fallbackInit = {
+        method: 'POST',
+        headers: fallbackHeaders,
+        body: requestOptions.body,
+        redirect: 'follow'
+      };
+      response = await fetch(fallbackUrl, fallbackInit);
+    }
     
     // Get response body and handle different content types
     let responseBody;
