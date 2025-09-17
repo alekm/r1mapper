@@ -290,13 +290,7 @@ export class RuckusApiService {
               id: ap.macAddress || ap.serialNumber || ap.id || '',
               name: ap.name || ap.model || 'Unknown AP',
               type: 'ap' as const,
-              status: (() => {
-                const status = ap.status || '';
-                console.log('AP status mapping:', { name: ap.name, originalStatus: status });
-                if (status.includes('2_00_Operational') || status === 'online') return 'online';
-                if (status.includes('needs_attention') || status === 'offline') return 'offline';
-                return 'unknown';
-              })(),
+              status: this.mapDeviceStatus(ap.status || ap.connectionStatus || ap.state || ap.connectionState || ap.isOnline || ap.online || ap.connected || ap.active),
               model: ap.model || 'Unknown',
               serialNumber: ap.serialNumber || '',
               macAddress: ap.macAddress || '',
@@ -320,13 +314,7 @@ export class RuckusApiService {
             id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
             name: switchDevice.name || switchDevice.model || 'Unknown Switch',
             type: 'switch' as const,
-            status: (() => {
-              const status = switchDevice.status || '';
-              console.log('Switch status mapping:', { name: switchDevice.name, originalStatus: status });
-              if (status.includes('2_00_Operational') || status === 'online') return 'online';
-              if (status.includes('needs_attention') || status === 'offline') return 'offline';
-              return 'unknown';
-            })(),
+            status: this.mapDeviceStatus(switchDevice.status || switchDevice.connectionStatus || switchDevice.state || switchDevice.connectionState || switchDevice.isOnline || switchDevice.online || switchDevice.connected || switchDevice.active),
             model: switchDevice.model || 'Unknown',
             serialNumber: switchDevice.serialNumber || '',
             macAddress: switchDevice.macAddress || '',
@@ -486,6 +474,30 @@ export class RuckusApiService {
       console.error('RuckusApiService: Failed to query RF neighbors:', error);
       return [];
     }
+  }
+
+  private mapDeviceStatus(status: any): 'online' | 'offline' | 'unknown' {
+    if (!status) return 'unknown';
+    
+    if (typeof status === 'boolean') {
+      return status ? 'online' : 'offline';
+    }
+    
+    if (typeof status === 'number') {
+      return status > 0 ? 'online' : 'offline';
+    }
+    
+    if (typeof status === 'string') {
+      const lowerStatus = status.toLowerCase();
+      if (lowerStatus.includes('online') || lowerStatus.includes('operational') || lowerStatus.includes('up') || lowerStatus.includes('active')) {
+        return 'online';
+      }
+      if (lowerStatus.includes('offline') || lowerStatus.includes('down') || lowerStatus.includes('inactive') || lowerStatus.includes('requiresattention') || lowerStatus.includes('disconnectedfromcloud')) {
+        return 'offline';
+      }
+    }
+    
+    return 'unknown';
   }
 }
 
