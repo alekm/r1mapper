@@ -353,11 +353,40 @@ export class RuckusApiService {
         }
       } catch {}
 
+      // Try to enrich with switch members data
+      let membersMap: Record<string, { model?: string; serial?: string }> = {};
+      try {
+        const membersRes = await apiPost(this.config, '/switches/members/query', { page: 1, pageSize: 1000 });
+        const members = Array.isArray(membersRes) ? membersRes : (membersRes as any)?.data || [];
+        console.log('RuckusApiService: switch members count:', members.length);
+        
+        if (members.length > 0) {
+          console.log('RuckusApiService: switch members[0] keys:', Object.keys(members[0] || {}));
+          console.log('RuckusApiService: switch members[0] sample:', {
+            switchMac: members[0]?.switchMac,
+            model: members[0]?.model,
+            serialNumber: members[0]?.serialNumber,
+            productModel: members[0]?.productModel,
+          });
+          
+          for (const m of members) {
+            const mac = (m.switchMac || m.macAddress || '').toLowerCase();
+            if (!mac) continue;
+            const model = m.model || m.productModel || membersMap[mac]?.model;
+            const serial = m.serialNumber || membersMap[mac]?.serial;
+            membersMap[mac] = { model, serial };
+          }
+        }
+      } catch (e) {
+        console.warn('RuckusApiService: switch members query failed:', e);
+      }
+
       return base.map(sw => {
         const detail = idToDetail[sw.id];
         const fromPorts = portsMap[sw.id] || {};
-        const model = (detail?.model || detail?.productModel || detail?.specifiedType || fromPorts.model || sw.model);
-        const serial = (detail?.serialNumber || fromPorts.serial || sw.serialNumber);
+        const fromMembers = membersMap[sw.id] || {};
+        const model = (detail?.model || detail?.productModel || detail?.specifiedType || fromMembers.model || fromPorts.model || sw.model);
+        const serial = (detail?.serialNumber || fromMembers.serial || fromPorts.serial || sw.serialNumber);
         return { ...sw, model, serialNumber: serial };
       });
     } catch (error) {
@@ -452,6 +481,7 @@ export class RuckusApiService {
         if (Array.isArray(switchPorts) && switchPorts.length > 0) {
           let skippedCount = 0;
           let skippedReasons: Record<string, number> = {};
+          let linkCount = 0;
           
           for (const port of switchPorts) {
             const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
@@ -473,6 +503,18 @@ export class RuckusApiService {
                 lastUpdated: new Date().toISOString(),
               };
               allLinks.push(link);
+              linkCount++;
+              
+              // Log first few successful links for debugging
+              if (linkCount <= 3) {
+                console.log(`RuckusApiService: created link ${linkCount}:`, {
+                  local: localDeviceMacNorm,
+                  remote: remoteDeviceMacNorm,
+                  localPort: link.localPort,
+                  remotePort: link.remotePort,
+                  neighborName: neighborName || 'none'
+                });
+              }
             } else {
               skippedCount++;
               if (!localDeviceMacNorm) skippedReasons['no local MAC'] = (skippedReasons['no local MAC'] || 0) + 1;
@@ -483,10 +525,8 @@ export class RuckusApiService {
             }
           }
           
-          // One-time log of skipped ports
-          if (skippedCount > 0) {
-            console.log(`RuckusApiService: skipped ${skippedCount} ports:`, skippedReasons);
-          }
+          // One-time log of results
+          console.log(`RuckusApiService: LLDP results - created ${linkCount} links, skipped ${skippedCount} ports:`, skippedReasons);
         }
       } catch (e) {
         console.warn('RuckusApiService: Switch-port LLDP query failed', e);
