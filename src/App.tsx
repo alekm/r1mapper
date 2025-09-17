@@ -323,6 +323,8 @@ function AppContent() {
                 onTriggerRFScan={handleTriggerRFScan}
                 loading={loading}
                 demoMode={demoMode}
+                filter={filter}
+                onFilterChange={setFilter}
               />
             } 
           />

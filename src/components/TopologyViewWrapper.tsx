@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, ArrowLeft } from 'lucide-react';
-import { Venue, RuckusDevice, LLDPLink, RFNeighbor } from '../types';
+import { Venue, RuckusDevice, LLDPLink, RFNeighbor, DeviceFilter } from '../types';
 import TopologyView from './TopologyView';
 import VenueSelector from './VenueSelector';
 
@@ -18,6 +18,8 @@ interface TopologyViewWrapperProps {
   onTriggerRFScan: () => void;
   loading: boolean;
   demoMode: boolean;
+  filter: DeviceFilter;
+  onFilterChange: (filter: DeviceFilter) => void;
 }
 
 const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
@@ -32,7 +34,9 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
   onLoadRFNeighbors,
   onTriggerRFScan,
   loading,
-  demoMode
+  demoMode,
+  filter,
+  onFilterChange
 }) => {
   const navigate = useNavigate();
 
@@ -170,39 +174,71 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 mb-2">Device Types</h3>
                   <div className="space-y-2 text-xs mb-4">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                      <span>Access Points</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span>Switches</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                      <span>Routers</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                      <span>Unknown</span>
-                    </div>
+                    <button
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'ap' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'ap' ? undefined : 'ap' })}
+                    >
+                      <span className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span>Access Points</span>
+                      </span>
+                      {filter.type === 'ap' && <span className="text-[10px]">selected</span>}
+                    </button>
+                    <button
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'switch' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'switch' ? undefined : 'switch' })}
+                    >
+                      <span className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span>Switches</span>
+                      </span>
+                      {filter.type === 'switch' && <span className="text-[10px]">selected</span>}
+                    </button>
+                    <button
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'router' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'router' ? undefined : 'router' })}
+                    >
+                      <span className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                        <span>Routers</span>
+                      </span>
+                      {filter.type === 'router' && <span className="text-[10px]">selected</span>}
+                    </button>
                   </div>
                   
                   <div className="pt-3 border-t border-gray-200">
                     <h4 className="text-xs font-semibold text-gray-900 mb-2">Status</h4>
                     <div className="space-y-1 text-xs">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span>Online</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        <span>Offline</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                        <span>Unknown</span>
-                      </div>
+                      <button
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'online' ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'online' ? undefined : 'online' })}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          <span>Online</span>
+                        </span>
+                        {filter.status === 'online' && <span className="text-[10px]">selected</span>}
+                      </button>
+                      <button
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'offline' ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'offline' ? undefined : 'offline' })}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          <span>Offline</span>
+                        </span>
+                        {filter.status === 'offline' && <span className="text-[10px]">selected</span>}
+                      </button>
+                      <button
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'unknown' ? 'bg-yellow-50 text-yellow-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'unknown' ? undefined : 'unknown' })}
+                      >
+                        <span className="flex items-center space-x-2">
+                          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                          <span>Unknown</span>
+                        </span>
+                        {filter.status === 'unknown' && <span className="text-[10px]">selected</span>}
+                      </button>
                     </div>
                   </div>
                 </div>
