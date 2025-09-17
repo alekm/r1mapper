@@ -336,7 +336,9 @@ export class RuckusApiService {
         this.getDevices(venueId),
         this.getLLDPLinks(venueId)
       ]);
-      return { devices, links };
+      const deviceIdSet = new Set(devices.map(d => d.id));
+      const filteredLinks = links.filter(l => deviceIdSet.has(l.localDeviceId) && deviceIdSet.has(l.remoteDeviceId));
+      return { devices, links: filteredLinks };
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch network topology:', error);
       throw new Error('Failed to fetch network topology from Ruckus One API');
