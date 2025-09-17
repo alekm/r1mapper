@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { RuckusDevice, LLDPLink } from '../types';
 import { clsx } from 'clsx';
 
@@ -53,6 +53,21 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     window.addEventListener('resize', updateDimensions);
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
+
+  // Listen for custom event to load saved view when venue is selected
+  useEffect(() => {
+    const handleLoadSavedView = (event: CustomEvent) => {
+      const { viewName } = event.detail;
+      if (viewName && savedViews.has(viewName)) {
+        loadView(viewName);
+      }
+    };
+
+    window.addEventListener('loadSavedView', handleLoadSavedView as EventListener);
+    return () => {
+      window.removeEventListener('loadSavedView', handleLoadSavedView as EventListener);
+    };
+  }, [savedViews, loadView]);
 
   // Load saved views from localStorage on mount
   useEffect(() => {
@@ -384,7 +399,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     }
   };
 
-  const loadView = (viewName: string) => {
+  const loadView = useCallback((viewName: string) => {
     const view = savedViews.get(viewName);
     if (view) {
       setDevicePositions(new Map(view.positions));
@@ -392,7 +407,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
       setManuallyPositionedDevices(new Set(view.manuallyPositioned || []));
       alert(`View "${viewName}" loaded successfully!`);
     }
-  };
+  }, [savedViews]);
 
   const deleteView = (viewName: string) => {
     if (!venueId) return;

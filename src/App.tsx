@@ -156,6 +156,27 @@ function AppContent() {
       }, 0);
       // Navigate to topology view when a venue is selected
       navigate('/topology');
+      
+      // Check for saved views and load the most recent one
+      setTimeout(() => {
+        const savedViewsData = localStorage.getItem(`topology-views-${venueId}`);
+        if (savedViewsData) {
+          try {
+            const viewsArray = JSON.parse(savedViewsData);
+            if (viewsArray.length > 0) {
+              // Find the most recent view (assuming they're ordered by creation time)
+              const mostRecentView = viewsArray[viewsArray.length - 1];
+              
+              // Dispatch a custom event to notify TopologyView to load this view
+              window.dispatchEvent(new CustomEvent('loadSavedView', {
+                detail: { viewName: mostRecentView.name }
+              }));
+            }
+          } catch (error) {
+            // Ignore parsing errors
+          }
+        }
+      }, 100); // Small delay to ensure TopologyView is mounted
     }
   };
 
