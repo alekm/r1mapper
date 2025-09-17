@@ -271,65 +271,84 @@ export class RuckusApiService {
     }
   }
 
+  async getAPs(venueId?: string): Promise<RuckusDevice[]> {
+    try {
+      const apsData = await apiGet(this.config, '/venues/aps') as any[];
+      let aps = Array.isArray(apsData) ? apsData : [];
+      
+      if (venueId) {
+        aps = aps.filter((ap: any) => ap.venueId === venueId || ap.venue === venueId);
+      }
+      
+      return aps.map((ap: any) => {
+        const rawStatus = ap.status || ap.connectionStatus || ap.state || ap.connectionState || ap.isOnline || ap.online || ap.connected || ap.active;
+        
+        return {
+          id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || '',
+          name: ap.name || ap.hostname || 'Unknown AP',
+          type: 'ap' as const,
+          model: ap.model || ap.productModel || 'Unknown',
+          serialNumber: ap.serialNumber || 'Unknown',
+          macAddress: (ap.macAddress || ap.mac || 'Unknown')?.toLowerCase() || '',
+          ipAddress: ap.ipAddress || ap.ip || 'Unknown',
+          status: this.mapDeviceStatus(rawStatus),
+          location: ap.location ? {
+            latitude: parseFloat(ap.location.latitude) || 0,
+            longitude: parseFloat(ap.location.longitude) || 0,
+          } : null,
+          lastSeen: ap.lastSeen || new Date().toISOString(),
+          firmwareVersion: ap.firmwareVersion,
+          uptime: ap.uptime,
+          venueId: venueId,
+        };
+      });
+    } catch (error) {
+      console.error('RuckusApiService: Failed to fetch APs:', error);
+      return [];
+    }
+  }
+
+  async getSwitches(venueId?: string): Promise<RuckusDevice[]> {
+    try {
+      const switchesData = await apiGet(this.config, '/switches') as any[];
+      let switches = Array.isArray(switchesData) ? switchesData : [];
+      
+      return switches.map((switch_: any) => {
+        const rawStatus = switch_.status || switch_.connectionStatus || switch_.state || switch_.connectionState || switch_.isOnline || switch_.online || switch_.connected || switch_.active;
+        const finalStatus = rawStatus || (switch_.ipAddress ? 'online' : 'unknown');
+        
+        return {
+          id: (switch_.macAddress || switch_.mac || switch_.id || switch_.serialNumber || 'unknown')?.toLowerCase() || '',
+          name: switch_.name || switch_.hostname || 'Unknown Switch',
+          type: 'switch' as const,
+          model: switch_.model || switch_.productModel || 'Unknown',
+          serialNumber: switch_.serialNumber || switch_.id || switch_.macAddress || 'unknown',
+          macAddress: (switch_.macAddress || switch_.mac || 'Unknown')?.toLowerCase() || '',
+          ipAddress: switch_.ipAddress || switch_.ip || 'Unknown',
+          status: this.mapDeviceStatus(finalStatus),
+          location: switch_.location ? {
+            latitude: parseFloat(switch_.location.latitude) || 0,
+            longitude: parseFloat(switch_.location.longitude) || 0,
+          } : null,
+          lastSeen: switch_.lastSeen || new Date().toISOString(),
+          firmwareVersion: switch_.firmwareVersion,
+          uptime: switch_.uptime,
+        };
+      });
+    } catch (error) {
+      console.error('RuckusApiService: Failed to fetch switches:', error);
+      return [];
+    }
+  }
+
   async getDevices(venueId?: string): Promise<RuckusDevice[]> {
     try {
-      const devices: RuckusDevice[] = [];
-      
-      // Get APs for the venue
-      if (venueId) {
-        try {
-          // Use the correct endpoint: GET /venues/aps (like r1helper)
-          const apsData = await apiGet(this.config, '/venues/aps') as any[];
-          if (Array.isArray(apsData)) {
-            // Filter APs by venue (like r1helper does)
-            const venueAps = apsData.filter((ap: any) => 
-              ap.venueId === venueId || ap.venue === venueId
-            );
-            
-            devices.push(...venueAps.map((ap: any) => ({
-              id: ap.macAddress || ap.serialNumber || ap.id || '',
-              name: ap.name || ap.model || 'Unknown AP',
-              type: 'ap' as const,
-              status: this.mapDeviceStatus(ap.status || ap.connectionStatus || ap.state || ap.connectionState || ap.isOnline || ap.online || ap.connected || ap.active),
-              model: ap.model || 'Unknown',
-              serialNumber: ap.serialNumber || '',
-              macAddress: ap.macAddress || '',
-              ipAddress: ap.ipAddress || '',
-              location: ap.location ? {
-                latitude: parseFloat(ap.location.latitude) || 0,
-                longitude: parseFloat(ap.location.longitude) || 0,
-              } : null,
-            })));
-          }
-        } catch (error) {
-          console.warn('Failed to fetch APs for venue:', error);
-        }
-      }
+      const [aps, switches] = await Promise.all([
+        this.getAPs(venueId),
+        this.getSwitches(venueId)
+      ]);
 
-      // Get switches
-      try {
-        const switchesData = await apiGet(this.config, '/switches') as any[];
-        if (Array.isArray(switchesData)) {
-          devices.push(...switchesData.map((switchDevice: any) => ({
-            id: switchDevice.macAddress || switchDevice.serialNumber || switchDevice.id || '',
-            name: switchDevice.name || switchDevice.model || 'Unknown Switch',
-            type: 'switch' as const,
-            status: this.mapDeviceStatus(switchDevice.status || switchDevice.connectionStatus || switchDevice.state || switchDevice.connectionState || switchDevice.isOnline || switchDevice.online || switchDevice.connected || switchDevice.active),
-            model: switchDevice.model || 'Unknown',
-            serialNumber: switchDevice.serialNumber || '',
-            macAddress: switchDevice.macAddress || '',
-            ipAddress: switchDevice.ipAddress || '',
-            location: switchDevice.location ? {
-              latitude: parseFloat(switchDevice.location.latitude) || 0,
-              longitude: parseFloat(switchDevice.location.longitude) || 0,
-            } : null,
-          })));
-        }
-      } catch (error) {
-        console.warn('Failed to fetch switches:', error);
-      }
-
-      return devices;
+      return [...aps, ...switches];
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch devices:', error);
       throw new Error('Failed to fetch devices');
@@ -437,6 +456,34 @@ export class RuckusApiService {
       return neighbors;
     } catch (error) {
       console.error('RuckusApiService: Failed to query RF neighbors:', error);
+      return [];
+    }
+  }
+
+  async getAPNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
+    try {
+      // Try to trigger LLDP neighbor collection first
+      try {
+        await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, {
+          status: "CURRENT",
+          type: "LLDP_NEIGHBOR"
+        });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (triggerError) {
+        // Continue if trigger fails
+      }
+      
+      // Query existing LLDP neighbor data
+      const requestBody = {
+        page: 1,
+        pageSize: 100,
+        filters: [{ type: "LLDP_NEIGHBOR" }]
+      };
+      
+      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, requestBody) as any[];
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('RuckusApiService: Failed to get AP LLDP neighbors:', error);
       return [];
     }
   }
