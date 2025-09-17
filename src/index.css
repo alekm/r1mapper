@@ -171,9 +171,14 @@
   }
   
   .sidebar-item.active {
-    background: linear-gradient(135deg, #ff6a00 0%, #ff8f1c 100%);
-    @apply text-black border-r-4 border-orange-600;
+    background: linear-gradient(135deg, #ff8c42 0%, #ffb366 100%);
+    @apply text-black border-r-4 border-orange-500;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar-item.active h3,
+  .sidebar-item.active p {
+    @apply text-black;
   }
   
   /* List components */
