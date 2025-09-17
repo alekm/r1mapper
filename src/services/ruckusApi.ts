@@ -415,6 +415,11 @@ export class RuckusApiService {
         if (!mac || typeof mac !== 'string') return undefined;
         return mac.replace(/[^0-9a-fA-F]/g, '').toLowerCase();
       };
+      // Budgets to avoid long operations on large sites
+      const MAX_APS_TO_CHECK = 20;
+      const MAX_LINKS_TO_COLLECT = 200;
+      const MAX_TOTAL_MS = 8000;
+      const startMs = Date.now();
 
       try {
         const switchPorts = await this.getSwitchPorts(venueId);
@@ -441,12 +446,15 @@ export class RuckusApiService {
               };
               allLinks.push(link);
             }
+            if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
+              break;
+            }
           }
         } else {
           // No switch-port data returned, fall back to AP-based LLDP discovery
           console.warn('RuckusApiService: No switch-port data; falling back to AP-based LLDP discovery');
           const aps = await this.getAPs(venueId);
-          const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown');
+          const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown').slice(0, MAX_APS_TO_CHECK);
           for (const ap of apsToCheck) {
             const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
             for (const neighbor of neighbors) {
@@ -465,6 +473,12 @@ export class RuckusApiService {
                 };
                 allLinks.push(link);
               }
+              if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
+                break;
+              }
+            }
+            if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
+              break;
             }
           }
         }
@@ -472,7 +486,7 @@ export class RuckusApiService {
         // If switch-port query hard-failed, also try AP-based LLDP discovery
         console.warn('RuckusApiService: Switch-port LLDP query failed; falling back to AP-based LLDP discovery', e);
         const aps = await this.getAPs(venueId);
-        const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown');
+        const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown').slice(0, MAX_APS_TO_CHECK);
         for (const ap of apsToCheck) {
           const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
           for (const neighbor of neighbors) {
@@ -491,6 +505,12 @@ export class RuckusApiService {
               };
               allLinks.push(link);
             }
+            if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
+              break;
+            }
+          }
+          if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
+            break;
           }
         }
       }
