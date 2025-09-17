@@ -51,7 +51,7 @@ exports.handler = async (event, context) => {
     const qs = Object.keys(qsObj)
       .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(qsObj[k]))}`)
       .join('&');
-    const targetUrl = qs ? `${apiBase}${path}?${qs}` : `${apiBase}${path}`;
+    let targetUrl = qs ? `${apiBase}${path}?${qs}` : `${apiBase}${path}`;
     
     // Debug logging
     console.log('Proxy request:', {
@@ -89,7 +89,8 @@ exports.handler = async (event, context) => {
     // Prepare the request options
     const requestOptions = {
       method: event.httpMethod,
-      headers: upstreamHeaders
+      headers: upstreamHeaders,
+      redirect: 'follow'
     };
 
     // Add body for POST/PUT requests
@@ -97,11 +98,23 @@ exports.handler = async (event, context) => {
       requestOptions.body = event.body;
     }
 
+    // If token call, normalize to non-tenant endpoint immediately and avoid following auth redirects
+    const tokenMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
+    if (tokenMatch) {
+      const tenantIdFromPath = tokenMatch[1];
+      // Force non-tenant token endpoint; do not include query params
+      targetUrl = `${apiBase}/oauth2/token`;
+      requestOptions.method = 'POST';
+      requestOptions.redirect = 'manual';
+      requestOptions.headers['content-type'] = requestOptions.headers['content-type'] || 'application/x-www-form-urlencoded';
+      requestOptions.headers['x-rks-tenantid'] = requestOptions.headers['x-rks-tenantid'] || tenantIdFromPath;
+      requestOptions.headers['x-tenant-id'] = requestOptions.headers['x-tenant-id'] || tenantIdFromPath;
+    }
+
     // Make the request to Ruckus One API (with token fallback like r1helper)
     let response = await fetch(targetUrl, requestOptions);
 
     // If this is a token call with tenant in path and upstream rejects/redirects, retry non-tenant endpoint with tenant headers
-    const tokenMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
     if (tokenMatch && response.status >= 300) {
       const tenantIdFromPath = tokenMatch[1];
       const fallbackUrl = `${apiBase}/oauth2/token`;
@@ -114,7 +127,7 @@ exports.handler = async (event, context) => {
         method: 'POST',
         headers: fallbackHeaders,
         body: requestOptions.body,
-        redirect: 'follow'
+        redirect: 'manual'
       };
       response = await fetch(fallbackUrl, fallbackInit);
     }
