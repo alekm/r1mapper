@@ -7,18 +7,30 @@ const handler = async (event, context) => {
     hasBody: !!event.body
   });
 
-  // Enable CORS for browser requests
+  // Enable robust CORS for browser requests
+  const requestOrigin = event.headers && (event.headers.origin || event.headers.Origin);
+  const allowedOrigins = new Set([
+    'https://r1mapper.com',
+    'https://www.r1mapper.com',
+    'https://r1mapper.netlify.app',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ]);
+  const corsOrigin = allowedOrigins.has(requestOrigin) ? requestOrigin : '*';
+
   const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Tenant-ID, X-MSP-ID, x-rks-tenantid',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Credentials': 'false',
+    'Access-Control-Allow-Headers': event.headers && (event.headers['access-control-request-headers'] || event.headers['Access-Control-Request-Headers'] || 'Content-Type, Authorization, X-Tenant-ID, X-MSP-ID, x-rks-tenantid'),
+    'Access-Control-Allow-Methods': event.headers && (event.headers['access-control-request-method'] || event.headers['Access-Control-Request-Method'] || 'GET, POST, PUT, PATCH, DELETE, OPTIONS'),
+    'Vary': 'Origin',
     'Content-Type': 'application/json'
   };
 
   // Handle preflight requests
   if (event.httpMethod === 'OPTIONS') {
     return {
-      statusCode: 200,
+      statusCode: 204,
       headers,
       body: ''
     };
