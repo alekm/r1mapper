@@ -60,6 +60,7 @@ export class RuckusApiService {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${btoa(`${this.config.clientId}:${this.config.clientSecret}`)}`,
       },
+      params: { region: this.config.region }
     });
 
     // Store the token for future requests
