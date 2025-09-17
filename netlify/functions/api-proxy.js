@@ -27,7 +27,9 @@ const handler = async (event, context) => {
     'Access-Control-Allow-Headers': event.headers && (event.headers['access-control-request-headers'] || event.headers['Access-Control-Request-Headers'] || 'Content-Type, Authorization, X-Tenant-ID, X-MSP-ID, x-rks-tenantid'),
     'Access-Control-Allow-Methods': event.headers && (event.headers['access-control-request-method'] || event.headers['Access-Control-Request-Method'] || 'GET, POST, PUT, PATCH, DELETE, OPTIONS'),
     'Vary': 'Origin',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
+    'Pragma': 'no-cache'
   };
 
   // Handle preflight requests
@@ -75,9 +77,32 @@ const handler = async (event, context) => {
       .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(originalQs[key]))}`)
       .join('&');
 
-    const targetUrl = forwardedParams
+    let targetUrl = forwardedParams
       ? `${apiBase}${path}?${forwardedParams}`
       : `${apiBase}${path}`;
+
+    // SPECIAL HANDLING: OAuth client_credentials token
+    // Normalize to POST /oauth2/token (no tenant in path), enforce body and headers
+    const isTokenPath = /\/oauth2\/token(\/[^/?]+)?/i.test(path);
+    if (isTokenPath) {
+      // Extract tenantId from path if present
+      const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
+      const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
+      const tenantIdHeader = event.headers['x-rks-tenantid'] || event.headers['x-tenant-id'] || tenantIdFromPath;
+
+      // Always call non-tenant endpoint
+      targetUrl = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
+
+      // Force method/body/headers for client_credentials
+      requestOptions.method = 'POST';
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        'content-type': 'application/x-www-form-urlencoded',
+        ...(tenantIdHeader ? { 'x-rks-tenantid': tenantIdHeader, 'x-tenant-id': tenantIdHeader } : {}),
+      };
+      // Body must be exactly grant_type=client_credentials
+      requestOptions.body = 'grant_type=client_credentials';
+    }
     
     // Debug logging
     console.log('Proxy request:', {
@@ -112,6 +137,7 @@ const handler = async (event, context) => {
     if (!upstreamHeaders['user-agent']) {
       upstreamHeaders['user-agent'] = 'r1mapper-proxy/1.0';
     }
+    // If Basic auth is present from client, preserve it; otherwise allow token shaping to set it if needed.
     
     // Add Accept header for JSON responses
     upstreamHeaders.accept = 'application/json';
