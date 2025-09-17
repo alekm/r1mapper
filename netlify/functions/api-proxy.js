@@ -133,7 +133,7 @@ const handler = async (event, context) => {
     }
 
     // Make the request to Ruckus One API using axios only
-    const axiosResp = await axios.request({
+    let axiosResp = await axios.request({
       method: event.httpMethod,
       url: targetUrl,
       headers: {
@@ -147,6 +147,28 @@ const handler = async (event, context) => {
       validateStatus: () => true, // pass through status
     });
 
+    // Follow up to 3 redirects manually when Location is provided
+    let redirectHops = 0;
+    while (axiosResp.status >= 300 && axiosResp.status < 400 && axiosResp.headers && axiosResp.headers.location && redirectHops < 3) {
+      const nextUrl = axiosResp.headers.location.startsWith('http')
+        ? axiosResp.headers.location
+        : `${apiBase}${axiosResp.headers.location}`;
+      redirectHops += 1;
+      console.log('Following redirect', { hop: redirectHops, status: axiosResp.status, location: nextUrl });
+      axiosResp = await axios.request({
+        method: event.httpMethod,
+        url: nextUrl,
+        headers: {
+          ...upstreamHeaders,
+          'x-region': region,
+        },
+        data: requestOptions.body,
+        httpsAgent: new https.Agent({ keepAlive: true }),
+        maxRedirects: 0,
+        validateStatus: () => true,
+      });
+    }
+
     const axContentType = axiosResp.headers['content-type'] || 'application/json';
     // If upstream sent a redirect, pass along the Location to help diagnose
     const location = axiosResp.headers['location'];
@@ -157,7 +179,8 @@ const handler = async (event, context) => {
       status: axiosResp.status,
       contentType: axContentType,
       bodyType: typeof axiosResp.data,
-      bodyLength: typeof axiosResp.data === 'string' ? axiosResp.data.length : 'object'
+      bodyLength: typeof axiosResp.data === 'string' ? axiosResp.data.length : 'object',
+      hasLocation: !!axiosResp.headers['location']
     });
 
     // Return the response
