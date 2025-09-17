@@ -395,13 +395,13 @@ export class RuckusApiService {
 
     try {
       // First trigger the RF scan
-      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { action: 'scan' });
+      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { status: "CURRENT", type: "RF_NEIGHBOR" });
 
       // Wait a moment for the scan to complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Then query the results
-      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { action: 'query' }) as any[];
+      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { page: 1, pageSize: 100, filters: [{ type: "RF_NEIGHBOR" }] }) as any[];
 
       const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
@@ -449,7 +449,7 @@ export class RuckusApiService {
     if (!venueId) return;
 
     try {
-      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { action: 'scan' });
+      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { status: "CURRENT", type: "RF_NEIGHBOR" });
     } catch (error) {
       console.error('RuckusApiService: Failed to trigger RF scan:', error);
       throw new Error('Failed to trigger RF scan');
@@ -460,7 +460,7 @@ export class RuckusApiService {
     if (!venueId) return [];
 
     try {
-      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { action: 'query' }) as any[];
+      const data = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { page: 1, pageSize: 100, filters: [{ type: "RF_NEIGHBOR" }] }) as any[];
 
       const neighbors: RFNeighbor[] = Array.isArray(data) ? data.map((neighbor: any) => ({
         macAddress: neighbor.macAddress || '',
