@@ -78,6 +78,20 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     }
   }, [venueId]);
 
+  // Warn before page unload if there are unsaved manual positions
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (manuallyPositionedDevices.size > 0) {
+        e.preventDefault();
+        e.returnValue = `You have ${manuallyPositionedDevices.size} device(s) with custom positions that will be lost. Save your view or continue to lose changes.`;
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [manuallyPositionedDevices.size]);
+
   // Layout algorithms
 
   const calculateLayout = (layout: LayoutType) => {
