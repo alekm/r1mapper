@@ -434,16 +434,10 @@ export class RuckusApiService {
     
     if (typeof status === 'string') {
       const lowerStatus = status.toLowerCase();
-      // Treat "Operational" and "Requires Attention" as online (device reachable)
+      // Treat "Operational" as online (device reachable)
       if (
         lowerStatus.includes('online') ||
         lowerStatus.includes('operational') ||
-        lowerStatus.includes('needs attention') ||
-        lowerStatus.includes('needs_attention') ||
-        lowerStatus.includes('needsattention') ||
-        lowerStatus.includes('requires attention') ||
-        lowerStatus.includes('requires_attention') ||
-        lowerStatus.includes('requiresattention') ||
         lowerStatus.includes('up') ||
         lowerStatus.includes('active')
       ) {
@@ -454,7 +448,13 @@ export class RuckusApiService {
         lowerStatus.includes('down') ||
         lowerStatus.includes('inactive') ||
         lowerStatus.includes('disconnectedfromcloud') ||
-        lowerStatus.includes('disconnected_from_cloud')
+        lowerStatus.includes('disconnected_from_cloud') ||
+        lowerStatus.includes('requires attention') ||
+        lowerStatus.includes('requires_attention') ||
+        lowerStatus.includes('requiresattention') ||
+        lowerStatus.includes('needs attention') ||
+        lowerStatus.includes('needs_attention') ||
+        lowerStatus.includes('needsattention')
       ) {
         return 'offline';
       }
