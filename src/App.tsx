@@ -222,7 +222,7 @@ function AppContent() {
               </div>
               <div>
                 <div className="logo-text">R1Mapper</div>
-                <div className="logo-subtitle">Network Topology Visualizer</div>
+                <div className="logo-subtitle">Network Topology Visualizer v1.0</div>
               </div>
             </div>
             {demoMode && (
