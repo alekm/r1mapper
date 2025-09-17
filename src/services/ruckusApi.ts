@@ -68,6 +68,9 @@ export class RuckusApiService {
 
   async getVenues(): Promise<Venue[]> {
     try {
+      // Ensure we're authenticated first
+      await this.authenticate();
+      
       const response = await this.api.get('/venues', {
         params: { region: this.config.region }
       });
@@ -93,6 +96,9 @@ export class RuckusApiService {
 
   async getDevices(venueId?: string): Promise<RuckusDevice[]> {
     try {
+      // Ensure we're authenticated first
+      await this.authenticate();
+      
       const devices: RuckusDevice[] = [];
       
       // Get APs for the venue
