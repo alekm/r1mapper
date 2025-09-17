@@ -52,8 +52,16 @@ const handler = async (event, context) => {
       };
     }
 
-    // Construct the target URL
-    const targetUrl = `${apiBase}${path}`;
+    // Construct the target URL with forwarded query params (excluding internal 'region')
+    const originalQs = event.queryStringParameters || {};
+    const forwardedParams = Object.keys(originalQs)
+      .filter((key) => key !== 'region' && originalQs[key] !== undefined && originalQs[key] !== null)
+      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(originalQs[key]))}`)
+      .join('&');
+
+    const targetUrl = forwardedParams
+      ? `${apiBase}${path}?${forwardedParams}`
+      : `${apiBase}${path}`;
     
     // Debug logging
     console.log('Proxy request:', {
@@ -94,9 +102,14 @@ const handler = async (event, context) => {
       headers: upstreamHeaders
     };
 
-    // Add body for POST/PUT requests
+    // Add body for POST/PUT/PATCH requests
     if (event.body && ['POST', 'PUT', 'PATCH'].includes(event.httpMethod)) {
-      requestOptions.body = event.body;
+      // Respect base64 encoding flag from Netlify
+      if (event.isBase64Encoded) {
+        requestOptions.body = Buffer.from(event.body, 'base64');
+      } else {
+        requestOptions.body = event.body;
+      }
     }
 
     // Make the request to Ruckus One API
