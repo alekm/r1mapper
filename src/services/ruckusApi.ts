@@ -28,7 +28,8 @@ function getApiBaseUrl(region: RuckusRegion): string {
     return proxyPaths[safeRegion];
   } else {
     // Use Netlify functions proxy in production
-    return '/api';
+    // Temporarily use netlify.app domain for testing
+    return 'https://r1mapper.netlify.app/api';
   }
 }
 
