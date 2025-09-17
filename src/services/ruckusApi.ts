@@ -250,24 +250,36 @@ export class RuckusApiService {
       if (venueId) {
         aps = aps.filter((ap: any) => ap.venueId === venueId || ap.venue === venueId);
       }
-      return aps.map((ap: any) => ({
-        id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || '',
-        name: ap.name || ap.hostname || 'Unknown AP',
-        type: 'ap' as const,
-        model: ap.model || ap.productModel || 'Unknown',
-        serialNumber: ap.serialNumber || 'Unknown',
-        macAddress: (ap.macAddress || ap.mac || 'Unknown')?.toLowerCase() || '',
-        ipAddress: ap.ipAddress || ap.ip || 'Unknown',
-        status: this.mapDeviceStatus(ap.status || ap.connectionStatus),
-        location: ap.location ? {
-          latitude: parseFloat(ap.location.latitude) || 0,
-          longitude: parseFloat(ap.location.longitude) || 0,
-        } : null,
-        lastSeen: ap.lastSeen || new Date().toISOString(),
-        firmwareVersion: ap.firmwareVersion,
-        uptime: ap.uptime,
-        venueId: venueId,
-      }));
+      return aps.map((ap: any) => {
+        const rawStatus =
+          ap.status ??
+          ap.connectionStatus ??
+          ap.state ??
+          ap.connectionState ??
+          ap.isOnline ??
+          ap.online ??
+          ap.connected ??
+          ap.active;
+
+        return {
+          id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || '',
+          name: ap.name || ap.hostname || 'Unknown AP',
+          type: 'ap' as const,
+          model: ap.model || ap.productModel || 'Unknown',
+          serialNumber: ap.serialNumber || 'Unknown',
+          macAddress: (ap.macAddress || ap.mac || 'Unknown')?.toLowerCase() || '',
+          ipAddress: ap.ipAddress || ap.ip || 'Unknown',
+          status: this.mapDeviceStatus(rawStatus),
+          location: ap.location ? {
+            latitude: parseFloat(ap.location.latitude) || 0,
+            longitude: parseFloat(ap.location.longitude) || 0,
+          } : null,
+          lastSeen: ap.lastSeen || new Date().toISOString(),
+          firmwareVersion: ap.firmwareVersion,
+          uptime: ap.uptime,
+          venueId: venueId,
+        };
+      });
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch APs:', error);
       return [];
@@ -422,10 +434,25 @@ export class RuckusApiService {
     
     if (typeof status === 'string') {
       const lowerStatus = status.toLowerCase();
-      if (lowerStatus.includes('online') || lowerStatus.includes('operational') || lowerStatus.includes('up') || lowerStatus.includes('active')) {
+      // Treat "Operational" and "Needs Attention" as online (device reachable)
+      if (
+        lowerStatus.includes('online') ||
+        lowerStatus.includes('operational') ||
+        lowerStatus.includes('needs attention') ||
+        lowerStatus.includes('needs_attention') ||
+        lowerStatus.includes('needsattention') ||
+        lowerStatus.includes('up') ||
+        lowerStatus.includes('active')
+      ) {
         return 'online';
       }
-      if (lowerStatus.includes('offline') || lowerStatus.includes('down') || lowerStatus.includes('inactive')) {
+      if (
+        lowerStatus.includes('offline') ||
+        lowerStatus.includes('down') ||
+        lowerStatus.includes('inactive') ||
+        lowerStatus.includes('disconnectedfromcloud') ||
+        lowerStatus.includes('disconnected_from_cloud')
+      ) {
         return 'offline';
       }
     }
