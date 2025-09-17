@@ -132,7 +132,7 @@ export async function getAccessToken(creds: RuckusCredentials): Promise<string> 
 }
 
 async function apiGet(
-  r1Type: R1Type,
+  _r1Type: R1Type,
   creds: RuckusCredentials,
   resourcePath: string
 ): Promise<unknown> {
@@ -235,7 +235,7 @@ export class RuckusApiService {
         location: venue.location ? {
           latitude: parseFloat(venue.location.latitude) || 0,
           longitude: parseFloat(venue.location.longitude) || 0,
-        } : null,
+        } : undefined,
       }));
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch venues:', error);
@@ -273,7 +273,7 @@ export class RuckusApiService {
           location: ap.location ? {
             latitude: parseFloat(ap.location.latitude) || 0,
             longitude: parseFloat(ap.location.longitude) || 0,
-          } : null,
+          } : undefined,
           lastSeen: ap.lastSeen || new Date().toISOString(),
           firmwareVersion: ap.firmwareVersion,
           uptime: ap.uptime,
@@ -305,7 +305,7 @@ export class RuckusApiService {
           location: sw.location ? {
             latitude: parseFloat(sw.location.latitude) || 0,
             longitude: parseFloat(sw.location.longitude) || 0,
-          } : null,
+          } : undefined,
           lastSeen: sw.lastSeen || new Date().toISOString(),
           firmwareVersion: sw.firmwareVersion,
           uptime: sw.uptime,
@@ -352,11 +352,20 @@ export class RuckusApiService {
   async queryAPRFNeighbors(venueId: string, serialNumber: string): Promise<RFNeighbor[]> {
     const res = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { page: 1, pageSize: 100, filters: [{ type: 'RF_NEIGHBOR' }] });
     const arr = Array.isArray(res) ? res : [];
-    return arr.map((n: any) => ({
+    const now = new Date().toISOString();
+    return arr.map((n: any, idx: number) => ({
+      id: n.id || `${serialNumber}-rf-${idx}`,
+      name: n.name || n.ssid || 'Unknown',
       macAddress: n.macAddress || '',
-      rssi: n.rssi || 0,
+      ssid: n.ssid,
       channel: n.channel || 0,
       frequency: n.frequency || 0,
+      band: n.band || (n.frequency >= 5900 ? '5GHz' : '2.4GHz'),
+      rssi: n.rssi || 0,
+      signalStrength: typeof n.rssi === 'number' ? n.rssi : 0,
+      lastSeen: n.lastSeen || now,
+      security: n.security,
+      vendor: n.vendor,
     }));
   }
 
@@ -375,40 +384,79 @@ export class RuckusApiService {
     try {
       const allLinks: LLDPLink[] = [];
       if (!venueId) return allLinks;
+      // Helper to normalize MAC strings for matching
+      const normalizeMac = (mac?: string): string | undefined => {
+        if (!mac || typeof mac !== 'string') return undefined;
+        return mac.replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+      };
+
       try {
         const switchPorts = await this.getSwitchPorts(venueId);
-        for (const port of switchPorts) {
-          const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
-          const neighborMac = port.neighborMacAddress || port.neighborMac || port.chassisId || port.remoteChassisId || port.lldpNeighborMac;
-          const neighborPort = port.remotePortId || port.portId || port.neighborPortMacAddress || port.neighborPortMac;
-          if (neighborName && neighborMac) {
-            const localDeviceMac = (port.switchMac || port.portMac || port.deviceMac)?.toLowerCase();
-            const remoteDeviceMac = neighborMac?.toLowerCase();
-            const link: LLDPLink = {
-              id: `${localDeviceMac}-${port.portIdentifier || port.portId}-${remoteDeviceMac}`,
-              localDeviceId: localDeviceMac,
-              remoteDeviceId: remoteDeviceMac,
-              localPort: port.portIdentifier || port.portId || 'Unknown',
-              remotePort: neighborPort || 'Unknown',
-              localPortDescription: port.name || port.tags || 'Switch Port',
-              remotePortDescription: neighborName || 'Unknown Device',
-              lastUpdated: new Date().toISOString(),
-            };
-            allLinks.push(link);
+
+        if (Array.isArray(switchPorts) && switchPorts.length > 0) {
+          for (const port of switchPorts) {
+            const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
+            const neighborMacRaw = port.neighborMacAddress || port.neighborMac || port.chassisId || port.remoteChassisId || port.lldpNeighborMac;
+            const neighborPort = port.remotePortId || port.portId || port.neighborPortMacAddress || port.neighborPortMac;
+
+            const localDeviceMacNorm = normalizeMac(port.switchMac || port.portMac || port.deviceMac);
+            const remoteDeviceMacNorm = normalizeMac(neighborMacRaw);
+
+            if (neighborName && localDeviceMacNorm && remoteDeviceMacNorm) {
+              const link: LLDPLink = {
+                id: `${localDeviceMacNorm}-${port.portIdentifier || port.portId || 'p'}-${remoteDeviceMacNorm}`,
+                localDeviceId: localDeviceMacNorm,
+                remoteDeviceId: remoteDeviceMacNorm,
+                localPort: port.portIdentifier || port.portId || 'Unknown',
+                remotePort: neighborPort || 'Unknown',
+                localPortDescription: port.name || port.tags || 'Switch Port',
+                remotePortDescription: neighborName || 'Unknown Device',
+                lastUpdated: new Date().toISOString(),
+              };
+              allLinks.push(link);
+            }
+          }
+        } else {
+          // No switch-port data returned, fall back to AP-based LLDP discovery
+          console.warn('RuckusApiService: No switch-port data; falling back to AP-based LLDP discovery');
+          const aps = await this.getAPs(venueId);
+          const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown');
+          for (const ap of apsToCheck) {
+            const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
+            for (const neighbor of neighbors) {
+              const neighMacNorm = normalizeMac(neighbor.neighborMacAddress);
+              const apMacNorm = normalizeMac(ap.macAddress);
+              if (neighMacNorm && apMacNorm && neighbor.neighborName) {
+                const link: LLDPLink = {
+                  id: `${apMacNorm}-${neighMacNorm}`,
+                  localDeviceId: apMacNorm,
+                  remoteDeviceId: neighMacNorm,
+                  localPort: 'Wireless',
+                  remotePort: neighbor.neighborPort || 'Unknown',
+                  localPortDescription: 'AP Wireless Interface',
+                  remotePortDescription: neighbor.neighborName || 'Unknown Device',
+                  lastUpdated: new Date().toISOString(),
+                };
+                allLinks.push(link);
+              }
+            }
           }
         }
       } catch (e) {
+        // If switch-port query hard-failed, also try AP-based LLDP discovery
+        console.warn('RuckusApiService: Switch-port LLDP query failed; falling back to AP-based LLDP discovery', e);
         const aps = await this.getAPs(venueId);
-        const apsToCheck = aps.slice(0, 10);
+        const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown');
         for (const ap of apsToCheck) {
-          if (!ap.serialNumber || ap.serialNumber === 'Unknown') continue;
           const neighbors = await this.getAPNeighbors(venueId, ap.serialNumber);
           for (const neighbor of neighbors) {
-            if (neighbor.neighborMacAddress && neighbor.neighborName) {
+            const neighMacNorm = normalizeMac(neighbor.neighborMacAddress);
+            const apMacNorm = normalizeMac(ap.macAddress);
+            if (neighMacNorm && apMacNorm && neighbor.neighborName) {
               const link: LLDPLink = {
-                id: `${ap.macAddress?.toLowerCase()}-${neighbor.neighborMacAddress?.toLowerCase()}`,
-                localDeviceId: ap.macAddress?.toLowerCase(),
-                remoteDeviceId: neighbor.neighborMacAddress?.toLowerCase(),
+                id: `${apMacNorm}-${neighMacNorm}`,
+                localDeviceId: apMacNorm,
+                remoteDeviceId: neighMacNorm,
                 localPort: 'Wireless',
                 remotePort: neighbor.neighborPort || 'Unknown',
                 localPortDescription: 'AP Wireless Interface',
