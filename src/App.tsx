@@ -181,49 +181,51 @@ function AppContent() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col app-container">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+      <header className="navbar">
+        <div className="navbar-container">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Wifi className="h-8 w-8 text-primary-600" />
-              <h1 className="text-2xl font-bold text-gray-900">r1mapper</h1>
+            <div className="logo">
+              <div className="logo-icon">
+                <Wifi className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="logo-text">r1mapper</div>
+                <div className="logo-subtitle">Network Topology Visualizer</div>
+              </div>
             </div>
-            <div className="text-sm text-gray-500">
-              Network Topology Visualizer
-              {demoMode && (
-                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                  Demo Mode
-                </span>
-              )}
-            </div>
+            {demoMode && (
+              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
+                Demo Mode
+              </span>
+            )}
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => navigate('/map')}
-                className={clsx(
-                  'btn btn-secondary',
-                  location.pathname === '/map' && 'bg-primary-100 text-primary-700'
-                )}
-              >
-                <MapPin className="h-4 w-4 mr-2" />
-                Map View
-              </button>
-              <button
-                onClick={() => navigate('/topology')}
-                className={clsx(
-                  'btn btn-secondary',
-                  location.pathname === '/topology' && 'bg-primary-100 text-primary-700'
-                )}
-              >
-                <Wifi className="h-4 w-4 mr-2" />
-                Topology
-              </button>
-            </div>
-            
+          <div className="nav-links">
+            <button
+              onClick={() => navigate('/map')}
+              className={clsx(
+                'nav-link',
+                location.pathname === '/map' && 'active'
+              )}
+            >
+              <MapPin className="h-4 w-4" />
+              <span>Map View</span>
+            </button>
+            <button
+              onClick={() => navigate('/topology')}
+              className={clsx(
+                'nav-link',
+                location.pathname === '/topology' && 'active'
+              )}
+            >
+              <Wifi className="h-4 w-4" />
+              <span>Topology</span>
+            </button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => loadNetworkData(selectedVenueId || undefined)}
               disabled={loading || (!demoMode && !selectedVenueId)}
@@ -249,11 +251,12 @@ function AppContent() {
               <Settings className="h-4 w-4" />
             </button>
           </div>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="main-container flex-1 flex flex-col relative">
         {error && (
           <div className="bg-red-50 border border-red-200 px-6 py-4">
             <div className="flex items-center space-x-3">

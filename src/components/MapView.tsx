@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Venue, RuckusDevice } from '../types';
+import { MapPin, Building2 } from 'lucide-react';
 
 // Component to fit map bounds to show all markers
 function FitBounds({ venues }: { venues: Venue[] }) {
@@ -97,54 +98,112 @@ const MapView: React.FC<MapViewProps> = ({
   }, [displayVenues, demoMode]);
 
   return (
-    <div className="h-full w-full">
-      <MapContainer
-        key={`map-${displayVenues.length}-${demoMode}`} // Force re-render when venues change
-        center={mapCenter}
-        zoom={mapZoom}
-        className="h-full w-full"
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-        />
+    <div className="h-full w-full flex">
+      {/* Sidebar with venue list */}
+      <div className="map-sidebar">
+        <div className="sidebar-header">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Building2 className="h-5 w-5 mr-2" style={{color: '#ff6a00'}} />
+            Venues
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {displayVenues.length} venue{displayVenues.length !== 1 ? 's' : ''} found
+          </p>
+        </div>
         
-        <FitBounds venues={displayVenues} />
-
-        {displayVenues.map((venue) => (
-          venue.location ? (
-            <Marker
-              key={venue.id}
-              position={[venue.location.latitude, venue.location.longitude]}
-              icon={new Icon({
-                iconUrl: `data:image/svg+xml;base64,${btoa(`
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="10" fill="#3B82F6" stroke="#ffffff" stroke-width="2"/>
-                    <path d="M12 11.5C10.62 11.5 9.5 10.38 9.5 9C9.5 7.62 10.62 6.5 12 6.5C13.38 6.5 14.5 7.62 14.5 9C14.5 10.38 13.38 11.5 12 11.5ZM12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 10.8C12.99 10.8 13.8 9.99 13.8 9C13.8 8.01 12.99 7.2 12 7.2C11.01 7.2 10.2 8.01 10.2 9C10.2 9.99 11.01 10.8 12 10.8Z" fill="#ffffff"/>
-                  </svg>
-                `)}`,
-                iconSize: [40, 40],
-                iconAnchor: [20, 40],
-                popupAnchor: [0, -30]
-              })}
-              eventHandlers={{
-                click: () => onVenueSelect(venue.id),
-              }}
-            >
-              <Popup>
-                <div className="font-semibold text-primary-700">{venue.name}</div>
-                <div className="text-sm text-gray-600">{venue.address}</div>
-                <button
+        <div className="sidebar-content">
+          {displayVenues.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No venues found</p>
+            </div>
+          ) : (
+            <div className="p-2">
+              {displayVenues.map((venue) => (
+                <div
+                  key={venue.id}
                   onClick={() => onVenueSelect(venue.id)}
-                  className="mt-2 px-3 py-1 bg-primary-500 text-white text-xs rounded hover:bg-primary-600"
+                  className={`sidebar-item rounded-lg mb-2 ${
+                    selectedVenueId === venue.id ? 'active' : ''
+                  }`}
                 >
-                  View Topology
-                </button>
-              </Popup>
-            </Marker>
-          ) : null
-        ))}
-      </MapContainer>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium truncate">
+                        {venue.name}
+                      </h3>
+                      {venue.address && (
+                        <p className="text-sm text-gray-500 mt-1 truncate">
+                          {venue.address}
+                        </p>
+                      )}
+                      {venue.location && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {venue.location.latitude.toFixed(4)}, {venue.location.longitude.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="ml-2 flex-shrink-0">
+                      <MapPin className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Map container */}
+      <div className="map-container">
+        <MapContainer
+          key={`map-${displayVenues.length}-${demoMode}`} // Force re-render when venues change
+          center={mapCenter}
+          zoom={mapZoom}
+          className="h-full w-full"
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+          />
+          
+          <FitBounds venues={displayVenues} />
+
+          {displayVenues.map((venue) => (
+            venue.location ? (
+              <Marker
+                key={venue.id}
+                position={[venue.location.latitude, venue.location.longitude]}
+                icon={new Icon({
+                  iconUrl: `data:image/svg+xml;base64,${btoa(`
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" fill="${selectedVenueId === venue.id ? '#10b981' : '#3B82F6'}" stroke="#ffffff" stroke-width="2"/>
+                      <path d="M12 11.5C10.62 11.5 9.5 10.38 9.5 9C9.5 7.62 10.62 6.5 12 6.5C13.38 6.5 14.5 7.62 14.5 9C14.5 10.38 13.38 11.5 12 11.5ZM12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 10.8C12.99 10.8 13.8 9.99 13.8 9C13.8 8.01 12.99 7.2 12 7.2C11.01 7.2 10.2 8.01 10.2 9C10.2 9.99 11.01 10.8 12 10.8Z" fill="#ffffff"/>
+                    </svg>
+                  `)}`,
+                  iconSize: [40, 40],
+                  iconAnchor: [20, 40],
+                  popupAnchor: [0, -30]
+                })}
+                eventHandlers={{
+                  click: () => onVenueSelect(venue.id),
+                }}
+              >
+                <Popup>
+                  <div className="font-semibold text-primary-700">{venue.name}</div>
+                  <div className="text-sm text-gray-600">{venue.address}</div>
+                  <button
+                    onClick={() => onVenueSelect(venue.id)}
+                    className="mt-2 px-3 py-1 bg-primary-500 text-white text-xs rounded hover:bg-primary-600"
+                  >
+                    View Topology
+                  </button>
+                </Popup>
+              </Marker>
+            ) : null
+          ))}
+        </MapContainer>
+      </div>
     </div>
   );
 };

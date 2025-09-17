@@ -5,14 +5,35 @@
 @layer base {
   html, body {
     @apply h-full;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffefe0 50%, #fff3e6 100%);
   }
   
   #root {
     @apply h-full;
   }
+  
+  /* Desktop-optimized typography */
+  body {
+    @apply text-sm leading-relaxed;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-gray-900;
+  }
+  
+  h1 { @apply text-2xl; }
+  h2 { @apply text-xl; }
+  h3 { @apply text-lg; }
+  h4 { @apply text-base; }
 }
 
 @layer components {
+  /* Device and connection styling */
   .device-node {
     @apply cursor-pointer transition-all duration-200;
   }
@@ -36,27 +57,204 @@
     stroke-width: 3;
   }
   
+  /* Loading and spinner components */
   .loading-spinner {
     @apply animate-spin rounded-full border-4 border-gray-200 border-t-primary-600;
   }
   
+  /* Card components - r1helper inspired */
   .card {
-    @apply bg-white rounded-lg shadow-md border border-gray-200;
+    @apply bg-white rounded-xl shadow-lg border border-gray-200;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
   
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-200 bg-gray-50 rounded-t-xl;
+  }
+  
+  .card-body {
+    @apply px-6 py-4;
+  }
+  
+  .card-footer {
+    @apply px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl;
+  }
+  
+  /* Button components - r1helper inspired */
   .btn {
-    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
   }
   
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+    background: linear-gradient(135deg, #ff6a00 0%, #ff8f1c 100%);
+    @apply text-black hover:scale-105 focus:ring-orange-500 shadow-lg;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #ff7a1a 0%, #ff9f3d 100%);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
   
   .btn-secondary {
-    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+    @apply bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-200 hover:bg-orange-50 focus:ring-orange-500 shadow-lg;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   }
   
+  .btn-secondary:hover {
+    @apply scale-105;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 shadow-lg;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+  
+  /* Form components - r1helper inspired */
   .input {
-    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500;
+    @apply block w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500;
+    transition: all 0.2s;
+  }
+  
+  .input:focus {
+    border-color: #ff8f1c;
+    box-shadow: 0 0 0 3px rgba(255, 143, 28, 0.15);
+  }
+  
+  .input-error {
+    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  
+  .form-group {
+    @apply mb-4;
+  }
+  
+  /* Sidebar components - desktop optimized */
+  .sidebar {
+    @apply bg-white border-r border-gray-200 flex flex-col;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+  }
+  
+  .sidebar-header {
+    @apply px-6 py-4 border-b border-gray-200 bg-gray-50;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffefe0 50%, #fff3e6 100%);
+  }
+  
+  .sidebar-content {
+    @apply flex-1 overflow-y-auto;
+  }
+  
+  .sidebar-item {
+    @apply px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-all duration-150;
+  }
+  
+  .sidebar-item:hover {
+    @apply transform scale-105;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffefe0 50%, #fff3e6 100%);
+  }
+  
+  .sidebar-item.active {
+    background: linear-gradient(135deg, #ff6a00 0%, #ff8f1c 100%);
+    @apply text-black border-r-4 border-orange-600;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* List components */
+  .list-item {
+    @apply px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150;
+  }
+  
+  .list-item:last-child {
+    @apply border-b-0;
+  }
+  
+  /* Status indicators */
+  .status-online {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800;
+  }
+  
+  .status-offline {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
+  }
+  
+  .status-unknown {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800;
+  }
+  
+  /* Table components */
+  .table {
+    @apply min-w-full divide-y divide-gray-200;
+  }
+  
+  .table-header {
+    @apply bg-gray-50;
+  }
+  
+  .table-header-cell {
+    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+  }
+  
+  .table-body {
+    @apply bg-white divide-y divide-gray-200;
+  }
+  
+  .table-cell {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+  }
+  
+  /* Map view specific */
+  .map-container {
+    @apply flex-1 relative;
+  }
+  
+  .map-sidebar {
+    @apply w-80 sidebar;
+  }
+  
+  /* Topology view specific */
+  .topology-container {
+    @apply flex-1 relative bg-gray-50;
+  }
+  
+  .topology-sidebar {
+    @apply w-80 sidebar;
+  }
+  
+  /* Utility classes */
+  .text-muted {
+    @apply text-gray-500;
+  }
+  
+  .text-success {
+    @apply text-green-600;
+  }
+  
+  .text-danger {
+    @apply text-red-600;
+  }
+  
+  .text-warning {
+    @apply text-yellow-600;
+  }
+  
+  .bg-muted {
+    @apply bg-gray-50;
   }
 }
