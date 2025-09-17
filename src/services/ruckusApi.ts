@@ -294,6 +294,22 @@ export class RuckusApiService {
     try {
       const response = await apiGet('regular', this.config, '/switches') as any[];
       const switches = Array.isArray(response) ? response : [];
+      
+      // Debug: log available fields for first switch to find hardware model
+      if (switches.length > 0) {
+        console.log('Switch fields available:', Object.keys(switches[0]));
+        console.log('First switch sample:', {
+          model: switches[0].model,
+          productModel: switches[0].productModel,
+          specifiedType: switches[0].specifiedType,
+          rearModule: switches[0].rearModule,
+          hardwareModel: switches[0].hardwareModel,
+          deviceModel: switches[0].deviceModel,
+          productName: switches[0].productName,
+          deviceType: switches[0].deviceType
+        });
+      }
+      
       const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
@@ -324,7 +340,17 @@ export class RuckusApiService {
       let portsMap: Record<string, { model?: string }> = {};
       try {
         const ports = await this.getSwitchPorts('');
-        if (Array.isArray(ports)) {
+        if (Array.isArray(ports) && ports.length > 0) {
+          // Debug: log switch port fields to find hardware model
+          console.log('Switch port fields available:', Object.keys(ports[0]));
+          console.log('First port sample:', {
+            switchModel: ports[0].switchModel,
+            switchName: ports[0].switchName,
+            switchSerial: ports[0].switchSerial,
+            deviceModel: ports[0].deviceModel,
+            productModel: ports[0].productModel
+          });
+          
           for (const p of ports) {
             const mac = (p.switchMac || '').toLowerCase();
             if (!mac) continue;
