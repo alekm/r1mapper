@@ -54,6 +54,17 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Define loadView function early so it can be used in useEffect
+  const loadView = useCallback((viewName: string) => {
+    const view = savedViews.get(viewName);
+    if (view) {
+      setDevicePositions(new Map(view.positions));
+      setLayoutType(view.layout);
+      setManuallyPositionedDevices(new Set(view.manuallyPositioned || []));
+      alert(`View "${viewName}" loaded successfully!`);
+    }
+  }, [savedViews]);
+
   // Listen for custom event to load saved view when venue is selected
   useEffect(() => {
     const handleLoadSavedView = (event: CustomEvent) => {
@@ -398,16 +409,6 @@ const TopologyView: React.FC<TopologyViewProps> = ({
       alert(`View "${viewName}" saved successfully for this venue!`);
     }
   };
-
-  const loadView = useCallback((viewName: string) => {
-    const view = savedViews.get(viewName);
-    if (view) {
-      setDevicePositions(new Map(view.positions));
-      setLayoutType(view.layout);
-      setManuallyPositionedDevices(new Set(view.manuallyPositioned || []));
-      alert(`View "${viewName}" loaded successfully!`);
-    }
-  }, [savedViews]);
 
   const deleteView = (viewName: string) => {
     if (!venueId) return;

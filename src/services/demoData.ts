@@ -136,24 +136,6 @@ export const demoDevices: RuckusDevice[] = [
     lastSeen: new Date().toISOString(),
     firmwareVersion: '08.0.95a',
     uptime: 4320000, // 50 days
-  },
-  {
-    id: 'ap-003',
-    name: 'Lobby AP-03',
-    type: 'ap',
-    model: 'R650',
-    serialNumber: 'SN123456791',
-    macAddress: '00:11:22:33:44:57',
-    ipAddress: '192.168.1.12',
-    status: 'offline',
-    location: {
-      latitude: 37.7752,
-      longitude: -122.4197,
-      address: 'San Francisco, CA'
-    },
-    lastSeen: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-    firmwareVersion: '5.1.1.0.1200',
-    uptime: 0,
     venueId: 'venue-001'
   },
   // Branch Office devices (venue-002) - Smaller, simpler equipment
