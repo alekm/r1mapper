@@ -146,8 +146,8 @@ const handler = async (event, context) => {
       const hdrs = event.headers || {};
       tenantIdHeader = hdrs['x-rks-tenantid'] || hdrs['x-tenant-id'] || hdrs['X-RKS-TenantID'] || hdrs['X-Tenant-Id'] || tenantIdFromPath;
 
-      // Always call non-tenant endpoint
-      targetUrl = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
+      // Always call non-tenant endpoint with NO query params
+      targetUrl = `${apiBase}/oauth2/token`;
 
       // Force method/body/headers for client_credentials
       requestOptions.method = 'POST';
@@ -197,17 +197,17 @@ const handler = async (event, context) => {
     // Special case: OAuth token path redirected to authorization (auth-code)
     // Fallback to non-tenant token endpoint with tenant header
     if (
+      isTokenPath &&
       axiosResp.status >= 300 && axiosResp.status < 400 &&
       axiosResp.headers && axiosResp.headers.location &&
-      /\/oauth2\/authorization\//i.test(axiosResp.headers.location) &&
-      /\/oauth2\/token\//i.test(path)
+      /\/oauth2\/authorization\//i.test(axiosResp.headers.location)
     ) {
       const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/);
       const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
       console.log('Fallback: retrying token without tenant path, with tenant header', {
         tenantIdFromPath
       });
-      const tokenUrlNoTenant = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
+      const tokenUrlNoTenant = `${apiBase}/oauth2/token`;
       axiosResp = await axios.request({
         method: 'POST',
         url: tokenUrlNoTenant,
