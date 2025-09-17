@@ -375,9 +375,35 @@ export class RuckusApiService {
   }
 
   private async getAPNeighbors(venueId: string, serialNumber: string): Promise<any[]> {
-    try { await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, { status: 'CURRENT', type: 'LLDP_NEIGHBOR' }); } catch {}
-    const res = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, { page: 1, pageSize: 100, filters: [{ type: 'LLDP_NEIGHBOR' }] });
-    return Array.isArray(res) ? res : [];
+    // Trigger LLDP neighbor collection on the AP
+    try {
+      await apiPatch(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors`, {
+        status: 'CURRENT',
+        type: 'LLDP_NEIGHBOR'
+      });
+    } catch (e) {
+      // Non-fatal: continue to query existing cache if trigger fails
+      console.warn(`RuckusApiService: LLDP trigger PATCH failed for AP ${serialNumber}`, e);
+    }
+
+    // Poll for results for a short period (AP may need time to populate)
+    const queryBody = { page: 1, pageSize: 100, filters: [{ type: 'LLDP_NEIGHBOR' }] };
+    const maxAttempts = 6; // ~6-9 seconds total depending on backoff
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const res = await apiPost(this.config, `/venues/${venueId}/aps/${serialNumber}/neighbors/query`, queryBody);
+        const arr = Array.isArray(res) ? res : [];
+        if (arr.length > 0) {
+          return arr;
+        }
+      } catch (qErr) {
+        // Log and continue retrying
+        console.warn(`RuckusApiService: LLDP neighbors query failed (attempt ${attempt + 1}/${maxAttempts}) for AP ${serialNumber}`, qErr);
+      }
+      // Backoff between attempts
+      await new Promise(r => setTimeout(r, 1000 + attempt * 500));
+    }
+    return [];
   }
 
   async getLLDPLinks(venueId?: string): Promise<LLDPLink[]> {
