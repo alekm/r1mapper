@@ -424,9 +424,8 @@ const TopologyView: React.FC<TopologyViewProps> = ({
   };
 
   const getDeviceColor = (device: RuckusDevice) => {
-    
-    if (device.status === 'offline') return '#ef4444';
-    if (device.status === 'online') {
+    // Device circle uses type-based color regardless of status; status is shown by the small badge
+    if (device.status === 'online' || device.status === 'offline' || device.status === 'unknown') {
       switch (device.type) {
         case 'ap': return '#3b82f6';
         case 'switch': return '#10b981';
