@@ -305,6 +305,8 @@ export class RuckusApiService {
             model: sw?.model,
             ipAddress: sw?.ipAddress || sw?.ip,
             status: sw?.status || sw?.connectionStatus || sw?.state,
+            specifiedType: sw?.specifiedType,
+            rearModule: sw?.rearModule,
           });
         });
       } catch {}
