@@ -625,3 +625,5 @@ export class RuckusApiService {
     return 'unknown';
   }
 }
+
+export default RuckusApiService;

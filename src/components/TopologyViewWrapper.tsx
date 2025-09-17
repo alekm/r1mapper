@@ -253,6 +253,7 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
             links={links}
             selectedDevice={selectedDevice}
             onDeviceSelect={onDeviceSelect}
+            venueId={selectedVenueId || undefined}
           />
         </div>
       </div>

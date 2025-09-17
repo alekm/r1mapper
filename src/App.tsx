@@ -191,7 +191,7 @@ function AppContent() {
                 <Wifi className="h-6 w-6" />
               </div>
               <div>
-                <div className="logo-text">r1mapper</div>
+                <div className="logo-text">R1Mapper</div>
                 <div className="logo-subtitle">Network Topology Visualizer</div>
               </div>
             </div>
@@ -250,7 +250,6 @@ function AppContent() {
             >
               <Settings className="h-4 w-4" />
             </button>
-          </div>
           </div>
         </div>
       </header>

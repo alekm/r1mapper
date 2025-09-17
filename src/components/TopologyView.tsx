@@ -9,13 +9,15 @@ interface TopologyViewProps {
   links: LLDPLink[];
   selectedDevice: RuckusDevice | null;
   onDeviceSelect: (device: RuckusDevice) => void;
+  venueId?: string;
 }
 
 const TopologyView: React.FC<TopologyViewProps> = ({
   devices,
   links,
   selectedDevice,
-  onDeviceSelect
+  onDeviceSelect,
+  venueId
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -33,6 +35,7 @@ const TopologyView: React.FC<TopologyViewProps> = ({
   const [draggedDeviceId, setDraggedDeviceId] = useState<string | null>(null);
   const [deviceDragStart, setDeviceDragStart] = useState({ x: 0, y: 0 });
   const [devicePositions, setDevicePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+  const [manuallyPositionedDevices, setManuallyPositionedDevices] = useState<Set<string>>(new Set());
   
   // View save/load state
   const [savedViews, setSavedViews] = useState<Map<string, { positions: Map<string, { x: number; y: number }>, layout: LayoutType }>>(new Map());
@@ -53,7 +56,9 @@ const TopologyView: React.FC<TopologyViewProps> = ({
 
   // Load saved views from localStorage on mount
   useEffect(() => {
-    const savedViewsData = localStorage.getItem('topology-views');
+    if (!venueId) return;
+    
+    const savedViewsData = localStorage.getItem(`topology-views-${venueId}`);
     if (savedViewsData) {
       try {
         const viewsArray = JSON.parse(savedViewsData);
@@ -61,14 +66,17 @@ const TopologyView: React.FC<TopologyViewProps> = ({
         viewsArray.forEach((view: any) => {
           viewsMap.set(view.name, {
             positions: new Map(view.positions),
-            layout: view.layout
+            layout: view.layout,
+            manuallyPositioned: new Set(view.manuallyPositioned || [])
           });
         });
         setSavedViews(viewsMap);
       } catch (error) {
       }
+    } else {
+      setSavedViews(new Map());
     }
-  }, []);
+  }, [venueId]);
 
   // Layout algorithms
 
@@ -76,9 +84,6 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     if (devices.length === 0) return new Map();
 
     const positions = new Map<string, { x: number; y: number }>();
-    
-    // Preserve custom positions for devices that have been manually positioned
-    const customPositions = new Map(devicePositions);
     const centerX = dimensions.width / 2;
     const centerY = dimensions.height / 2;
     const margin = 50; // Standard margin for device spacing
@@ -266,9 +271,12 @@ const TopologyView: React.FC<TopologyViewProps> = ({
         break;
     }
 
-    // Preserve custom positions for devices that have been manually positioned
-    customPositions.forEach((pos, deviceId) => {
-      positions.set(deviceId, pos);
+    // Preserve positions for manually positioned devices
+    manuallyPositionedDevices.forEach(deviceId => {
+      const customPos = devicePositions.get(deviceId);
+      if (customPos) {
+        positions.set(deviceId, customPos);
+      }
     });
 
     return positions;
@@ -303,6 +311,9 @@ const TopologyView: React.FC<TopologyViewProps> = ({
         });
         setDevicePositions(newPositions);
         setDeviceDragStart({ x: e.clientX, y: e.clientY });
+        
+        // Mark device as manually positioned
+        setManuallyPositionedDevices(prev => new Set(prev).add(draggedDeviceId));
       }
     } else if (isDragging) {
       // Handle pan dragging
@@ -330,24 +341,31 @@ const TopologyView: React.FC<TopologyViewProps> = ({
 
   // View save/load functions
   const saveView = () => {
+    if (!venueId) {
+      alert('No venue selected. Cannot save view.');
+      return;
+    }
+    
     const viewName = prompt('Enter a name for this view:');
     if (viewName && viewName.trim()) {
       const newViews = new Map(savedViews);
       newViews.set(viewName.trim(), {
         positions: new Map(devicePositions),
-        layout: layoutType
+        layout: layoutType,
+        manuallyPositioned: new Set(manuallyPositionedDevices)
       });
       setSavedViews(newViews);
       
-      // Save to localStorage
+      // Save to venue-specific localStorage
       const viewsArray = Array.from(newViews.entries()).map(([name, data]) => ({
         name,
         positions: Array.from(data.positions.entries()),
-        layout: data.layout
+        layout: data.layout,
+        manuallyPositioned: Array.from(data.manuallyPositioned || [])
       }));
-      localStorage.setItem('topology-views', JSON.stringify(viewsArray));
+      localStorage.setItem(`topology-views-${venueId}`, JSON.stringify(viewsArray));
       
-      alert(`View "${viewName}" saved successfully!`);
+      alert(`View "${viewName}" saved successfully for this venue!`);
     }
   };
 
@@ -356,29 +374,38 @@ const TopologyView: React.FC<TopologyViewProps> = ({
     if (view) {
       setDevicePositions(new Map(view.positions));
       setLayoutType(view.layout);
+      setManuallyPositionedDevices(new Set(view.manuallyPositioned || []));
       alert(`View "${viewName}" loaded successfully!`);
     }
   };
 
   const deleteView = (viewName: string) => {
+    if (!venueId) return;
+    
     if (confirm(`Are you sure you want to delete view "${viewName}"?`)) {
       const newViews = new Map(savedViews);
       newViews.delete(viewName);
       setSavedViews(newViews);
       
-      // Update localStorage
+      // Update venue-specific localStorage
       const viewsArray = Array.from(newViews.entries()).map(([name, data]) => ({
         name,
         positions: Array.from(data.positions.entries()),
-        layout: data.layout
+        layout: data.layout,
+        manuallyPositioned: Array.from(data.manuallyPositioned || [])
       }));
-      localStorage.setItem('topology-views', JSON.stringify(viewsArray));
+      localStorage.setItem(`topology-views-${venueId}`, JSON.stringify(viewsArray));
     }
   };
 
   const resetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    setDevicePositions(new Map());
+    setManuallyPositionedDevices(new Set());
+    // Force layout recalculation by updating device positions with current layout
+    const newPositions = calculateLayout(layoutType);
+    setDevicePositions(newPositions);
   };
 
   const getDeviceColor = (device: RuckusDevice) => {
@@ -452,7 +479,23 @@ const TopologyView: React.FC<TopologyViewProps> = ({
       <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md p-2 z-10 flex items-center space-x-2">
         <select
           value={layoutType}
-          onChange={(e) => setLayoutType(e.target.value as LayoutType)}
+          onChange={(e) => {
+            const newLayout = e.target.value as LayoutType;
+            // Check if there are manually positioned devices
+            if (manuallyPositionedDevices.size > 0) {
+              const shouldOverwrite = confirm(
+                `You have ${manuallyPositionedDevices.size} device(s) with custom positions. Changing the layout will reset all device positions. Do you want to continue?`
+              );
+              if (!shouldOverwrite) {
+                return; // User cancelled, don't change layout
+              }
+            }
+            
+            setLayoutType(newLayout);
+            const newPositions = calculateLayout(newLayout);
+            setDevicePositions(newPositions);
+            setManuallyPositionedDevices(new Set()); // Clear manual positioning since we're applying new layout
+          }}
           className="text-sm border-0 bg-transparent focus:outline-none focus:ring-0"
         >
           <option value="hierarchical">Hierarchical</option>
