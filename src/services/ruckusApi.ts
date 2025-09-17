@@ -290,6 +290,24 @@ export class RuckusApiService {
     try {
       const response = await apiGet('regular', this.config, '/switches') as any[];
       const switches = Array.isArray(response) ? response : [];
+      // TEMP DEBUG: Inspect raw switch objects (limited sample)
+      try {
+        const sample = switches.slice(0, 5);
+        console.log('RuckusApiService: switches sample count', switches.length);
+        sample.forEach((sw, idx) => {
+          const keys = Object.keys(sw || {});
+          console.log(`RuckusApiService: switch[${idx}] keys`, keys);
+          console.log(`RuckusApiService: switch[${idx}] sample`, {
+            id: sw?.id,
+            name: sw?.name || sw?.hostname,
+            macAddress: sw?.macAddress || sw?.mac,
+            serialNumber: sw?.serialNumber,
+            model: sw?.model,
+            ipAddress: sw?.ipAddress || sw?.ip,
+            status: sw?.status || sw?.connectionStatus || sw?.state,
+          });
+        });
+      } catch {}
       return switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
