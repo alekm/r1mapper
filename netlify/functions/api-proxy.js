@@ -1,19 +1,9 @@
-// Use built-in fetch (available in Node.js 18+)
-
-// Regional API endpoints mapping
-const REGIONAL_ENDPOINTS = {
-  na: 'https://api.ruckus.cloud',
-  eu: 'https://api.eu.ruckus.cloud',
-  asia: 'https://api.asia.ruckus.cloud'
-};
-
 export default async function handler(event, context) {
   console.log('Function called with:', {
     method: event.httpMethod,
     path: event.path,
     queryString: event.queryStringParameters,
-    hasBody: !!event.body,
-    headers: event.headers
+    hasBody: !!event.body
   });
 
   // Enable CORS for browser requests
@@ -34,6 +24,13 @@ export default async function handler(event, context) {
   }
 
   try {
+    // Regional API endpoints mapping
+    const REGIONAL_ENDPOINTS = {
+      na: 'https://api.ruckus.cloud',
+      eu: 'https://api.eu.ruckus.cloud',
+      asia: 'https://api.asia.ruckus.cloud'
+    };
+
     // Parse the path to determine region and target endpoint
     let path = event.path.replace('/.netlify/functions/api-proxy', '');
     
