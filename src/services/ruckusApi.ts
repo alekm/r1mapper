@@ -212,6 +212,12 @@ export class RuckusApiService {
     this.config = config;
   }
 
+  // Normalize MAC-like identifiers (remove separators, lowercase)
+  private normalizeMacId(value?: string): string {
+    if (!value || typeof value !== 'string') return '';
+    return value.replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+  }
+
   async getVenues(): Promise<Venue[]> {
     try {
       const response = await apiGet('regular', this.config, '/venues') as any[];
@@ -261,8 +267,10 @@ export class RuckusApiService {
           ap.connected ??
           ap.active;
 
+        const rawMac = (ap.macAddress || ap.mac || ap.id || ap.serialNumber) as string | undefined;
+        const normId = this.normalizeMacId(rawMac);
         return {
-          id: (ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || '',
+          id: normId || ((ap.macAddress || ap.mac || ap.id || ap.serialNumber)?.toLowerCase() || ''),
           name: ap.name || ap.hostname || 'Unknown AP',
           type: 'ap' as const,
           model: ap.model || ap.productModel || 'Unknown',
@@ -295,7 +303,8 @@ export class RuckusApiService {
       const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
-        const idOrMac = (sw.macAddress || sw.mac || sw.id || 'unknown').toLowerCase();
+        const rawMac = (sw.macAddress || sw.mac || sw.id) as string | undefined;
+        const idOrMac = this.normalizeMacId(rawMac) || (rawMac?.toLowerCase() || 'unknown');
         return {
           id: idOrMac,
           name: sw.name || sw.hostname || 'Unknown Switch',
