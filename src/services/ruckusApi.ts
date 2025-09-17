@@ -308,7 +308,7 @@ export class RuckusApiService {
           });
         });
       } catch {}
-      return switches.map((sw: any) => {
+      const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
         const idOrMac = (sw.macAddress || sw.mac || sw.id || 'unknown').toLowerCase();
@@ -329,6 +329,37 @@ export class RuckusApiService {
           firmwareVersion: sw.firmwareVersion,
           uptime: sw.uptime,
         };
+      });
+
+      // Enrich with per-switch details to discover proper model fields, but cap for performance
+      const MAX_DETAIL = 10;
+      const detailTargets = base.slice(0, MAX_DETAIL).map(s => s.id);
+      const enriched = await Promise.all(
+        detailTargets.map(async (id) => {
+          try {
+            const detail = await apiGet('regular', this.config, `/switches/${encodeURIComponent(id)}`) as any;
+            // Debug keys to learn fields
+            try {
+              console.log('RuckusApiService: switch detail keys for', id, Object.keys(detail || {}));
+            } catch {}
+            return { id, detail };
+          } catch (e) {
+            return { id, detail: null };
+          }
+        })
+      );
+
+      const idToDetail: Record<string, any> = {};
+      for (const d of enriched) {
+        if (d && d.detail) idToDetail[d.id] = d.detail;
+      }
+
+      return base.map(sw => {
+        const detail = idToDetail[sw.id];
+        if (!detail) return sw;
+        const model = detail.model || detail.productModel || detail.specifiedType || sw.model;
+        const serial = detail.serialNumber || sw.serialNumber;
+        return { ...sw, model, serialNumber: serial };
       });
     } catch (error) {
       console.error('RuckusApiService: Failed to fetch switches:', error);
