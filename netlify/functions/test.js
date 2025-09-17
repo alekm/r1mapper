@@ -1,4 +1,4 @@
-export default async function handler(event, context) {
+const handler = async (event, context) => {
   console.log('Test function called');
   
   return {
@@ -14,4 +14,6 @@ export default async function handler(event, context) {
       path: event.path
     })
   };
-}
+};
+
+module.exports = { handler };

@@ -2,7 +2,6 @@
   "name": "r1mapper",
   "version": "1.0.0",
   "description": "Interactive network topology mapper for Ruckus One devices and LLDP neighbors",
-  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "vite",

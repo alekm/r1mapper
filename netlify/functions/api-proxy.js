@@ -1,4 +1,5 @@
-export default async function handler(event, context) {
+// Use CommonJS syntax instead of ES modules
+const handler = async (event, context) => {
   console.log('Function called with:', {
     method: event.httpMethod,
     path: event.path,
@@ -151,4 +152,6 @@ export default async function handler(event, context) {
       })
     };
   }
-}
+};
+
+module.exports = { handler };
