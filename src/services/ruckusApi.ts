@@ -290,26 +290,8 @@ export class RuckusApiService {
     try {
       const response = await apiGet('regular', this.config, '/switches') as any[];
       const switches = Array.isArray(response) ? response : [];
-      // TEMP DEBUG: Inspect raw switch objects (limited sample)
-      try {
-        const sample = switches.slice(0, 5);
-        console.log('RuckusApiService: switches sample count', switches.length);
-        sample.forEach((sw, idx) => {
-          const keys = Object.keys(sw || {});
-          console.log(`RuckusApiService: switch[${idx}] keys`, keys);
-          console.log(`RuckusApiService: switch[${idx}] sample`, {
-            id: sw?.id,
-            name: sw?.name || sw?.hostname,
-            macAddress: sw?.macAddress || sw?.mac,
-            serialNumber: sw?.serialNumber,
-            model: sw?.model,
-            ipAddress: sw?.ipAddress || sw?.ip,
-            status: sw?.status || sw?.connectionStatus || sw?.state,
-            specifiedType: sw?.specifiedType,
-            rearModule: sw?.rearModule,
-          });
-        });
-      } catch {}
+      // Debug: log switch count
+      console.log('RuckusApiService: switches count', switches.length);
       const base = switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
@@ -337,13 +319,13 @@ export class RuckusApiService {
       const MAX_DETAIL = 10;
       const detailTargets = base.slice(0, MAX_DETAIL).map(s => s.id);
       const enriched = await Promise.all(
-        detailTargets.map(async (id) => {
+        detailTargets.map(async (id, idx) => {
           try {
             const detail = await apiGet('regular', this.config, `/switches/${encodeURIComponent(id)}`) as any;
-            // Debug keys to learn fields
-            try {
+            // Debug: log detail keys for first switch only
+            if (idx === 0) {
               console.log('RuckusApiService: switch detail keys for', id, Object.keys(detail || {}));
-            } catch {}
+            }
             return { id, detail };
           } catch (e) {
             return { id, detail: null };
@@ -439,33 +421,11 @@ export class RuckusApiService {
   private async getSwitchPorts(_venueId: string): Promise<any[]> {
     // Note: venueId kept for API scoping in future; currently not used in this query body
     const queryBody = { page: 1, pageSize: 1000 };
-    console.log('RuckusApiService: switchPorts query body:', queryBody);
     const res = await apiPost(this.config, '/venues/switches/switchPorts/query', queryBody);
-    console.log('RuckusApiService: switchPorts response type:', typeof res, 'isArray:', Array.isArray(res));
     
     // Extract data array from paginated response
     const ports = Array.isArray(res) ? res : (res as any)?.data || [];
     console.log('RuckusApiService: switchPorts count:', ports.length);
-    
-    if (ports.length > 0) {
-      console.log('RuckusApiService: switchPorts[0] keys:', Object.keys(ports[0] || {}));
-      console.log('RuckusApiService: switchPorts[0] sample:', {
-        switchMac: ports[0]?.switchMac,
-        portMac: ports[0]?.portMac,
-        deviceMac: ports[0]?.deviceMac,
-        neighborName: ports[0]?.neighborName,
-        neighborMacAddress: ports[0]?.neighborMacAddress,
-        neighborMac: ports[0]?.neighborMac,
-        chassisId: ports[0]?.chassisId,
-        remoteChassisId: ports[0]?.remoteChassisId,
-        lldpNeighborMac: ports[0]?.lldpNeighborMac,
-        portIdentifier: ports[0]?.portIdentifier,
-        portId: ports[0]?.portId,
-        remotePortId: ports[0]?.remotePortId,
-        neighborPortMacAddress: ports[0]?.neighborPortMacAddress,
-        neighborPortMac: ports[0]?.neighborPortMac,
-      });
-    }
     
     return ports;
   }
@@ -490,6 +450,9 @@ export class RuckusApiService {
         const switchPorts = await this.getSwitchPorts(venueId);
 
         if (Array.isArray(switchPorts) && switchPorts.length > 0) {
+          let skippedCount = 0;
+          let skippedReasons: Record<string, number> = {};
+          
           for (const port of switchPorts) {
             const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
             const neighborMacRaw = port.neighborMacAddress || port.neighborMac || port.chassisId || port.remoteChassisId || port.lldpNeighborMac;
@@ -510,10 +473,20 @@ export class RuckusApiService {
                 lastUpdated: new Date().toISOString(),
               };
               allLinks.push(link);
+            } else {
+              skippedCount++;
+              if (!neighborName) skippedReasons['no neighbor name'] = (skippedReasons['no neighbor name'] || 0) + 1;
+              if (!localDeviceMacNorm) skippedReasons['no local MAC'] = (skippedReasons['no local MAC'] || 0) + 1;
+              if (!remoteDeviceMacNorm) skippedReasons['no remote MAC'] = (skippedReasons['no remote MAC'] || 0) + 1;
             }
             if (allLinks.length >= MAX_LINKS_TO_COLLECT || Date.now() - startMs > MAX_TOTAL_MS) {
               break;
             }
+          }
+          
+          // One-time log of skipped ports
+          if (skippedCount > 0) {
+            console.log(`RuckusApiService: skipped ${skippedCount} ports:`, skippedReasons);
           }
         }
       } catch (e) {
