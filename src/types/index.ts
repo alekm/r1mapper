@@ -36,6 +36,21 @@ export interface LLDPLink {
   lastUpdated: string;
 }
 
+export interface RFNeighbor {
+  id: string;
+  name: string;
+  macAddress: string;
+  ssid?: string;
+  channel: number;
+  frequency: number;
+  band: '2.4GHz' | '5GHz' | '6GHz';
+  rssi: number;
+  signalStrength: number;
+  lastSeen: string;
+  security?: string;
+  vendor?: string;
+}
+
 export interface NetworkTopology {
   devices: RuckusDevice[];
   links: LLDPLink[];
@@ -64,10 +79,23 @@ export interface AppState {
 }
 
 // API Configuration
+export type RuckusRegion = 'na' | 'eu' | 'asia';
+
 export interface RuckusConfig {
-  region: string;
+  region: RuckusRegion;
   tenantId: string;
   clientId: string;
   clientSecret: string;
-  scope: string;
+}
+
+// Venue types
+export interface Venue {
+  id: string;
+  name: string;
+  description?: string;
+  address?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
 }

@@ -8,12 +8,29 @@ interface ConfigModalProps {
 }
 
 const ConfigModal: React.FC<ConfigModalProps> = ({ onSave, onDemoMode }) => {
-  const [config, setConfig] = useState<RuckusConfig>({
-    region: 'api.ruckus.cloud',
-    tenantId: '',
-    clientId: '',
-    clientSecret: '',
-    scope: 'read'
+  const [config, setConfig] = useState<RuckusConfig>(() => {
+    // Load saved configuration from localStorage
+    const savedConfig = localStorage.getItem('ruckus-config');
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig);
+        return {
+          region: parsed.region || 'na',
+          tenantId: parsed.tenantId || '',
+          clientId: parsed.clientId || '',
+          clientSecret: parsed.clientSecret || ''
+        };
+      } catch (error) {
+      }
+    }
+    
+    // Default configuration
+    return {
+      region: 'na',
+      tenantId: '',
+      clientId: '',
+      clientSecret: ''
+    };
   });
   const [showSecret, setShowSecret] = useState(false);
 
@@ -23,9 +40,9 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onSave, onDemoMode }) => {
   };
 
   const regionOptions = [
-    { value: 'api.ruckus.cloud', label: 'North America' },
-    { value: 'api.eu.ruckus.cloud', label: 'Europe' },
-    { value: 'api.asia.ruckus.cloud', label: 'Asia' },
+    { value: 'na', label: 'North America (api.ruckus.cloud)' },
+    { value: 'eu', label: 'Europe (api.eu.ruckus.cloud)' },
+    { value: 'asia', label: 'Asia (api.asia.ruckus.cloud)' },
   ];
 
   return (
@@ -48,7 +65,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onSave, onDemoMode }) => {
             </label>
             <select
               value={config.region}
-              onChange={(e) => setConfig({ ...config, region: e.target.value })}
+              onChange={(e) => setConfig({ ...config, region: e.target.value as 'na' | 'eu' | 'asia' })}
               className="input"
               required
             >
@@ -109,22 +126,6 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onSave, onDemoMode }) => {
                 {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Scope
-            </label>
-            <input
-              type="text"
-              value={config.scope}
-              onChange={(e) => setConfig({ ...config, scope: e.target.value })}
-              className="input"
-              placeholder="read"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Usually "read" for basic device information access
-            </p>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">

@@ -171,23 +171,29 @@ export const demoLinks: LLDPLink[] = [
 // Demo API service that returns the demo data
 export class DemoApiService {
   async getDevices(): Promise<RuckusDevice[]> {
+    console.log('DemoApiService: Getting demo devices...');
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('DemoApiService: Returning', demoDevices.length, 'devices');
     return demoDevices;
   }
 
   async getLLDPLinks(): Promise<LLDPLink[]> {
+    console.log('DemoApiService: Getting demo links...');
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
+    console.log('DemoApiService: Returning', demoLinks.length, 'links');
     return demoLinks;
   }
 
   async getNetworkTopology() {
+    console.log('DemoApiService: Getting network topology...');
     const [devices, links] = await Promise.all([
       this.getDevices(),
       this.getLLDPLinks()
     ]);
 
+    console.log('DemoApiService: Topology complete:', { devices: devices.length, links: links.length });
     return { devices, links };
   }
 }

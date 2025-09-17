@@ -14,7 +14,7 @@
 
 @layer components {
   .device-node {
-    @apply cursor-pointer transition-all duration-200 hover:scale-110;
+    @apply cursor-pointer transition-all duration-200;
   }
   
   .device-node.online {

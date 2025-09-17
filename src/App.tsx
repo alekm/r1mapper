@@ -1,83 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { Icon } from 'leaflet';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Wifi, 
-  Router, 
-  Server, 
   MapPin, 
   RefreshCw, 
-  Search, 
-  Filter,
   Settings,
   AlertCircle,
-  CheckCircle,
-  Clock
+  Loader2
 } from 'lucide-react';
-import { RuckusDevice, LLDPLink, DeviceFilter, RuckusConfig } from './types';
+import { RuckusDevice, LLDPLink, DeviceFilter, RuckusConfig, Venue, RFNeighbor } from './types';
 import RuckusApiService from './services/ruckusApi';
 import { DemoApiService } from './services/demoData';
-import DeviceDetails from './components/DeviceDetails';
-import FilterPanel from './components/FilterPanel';
 import ConfigModal from './components/ConfigModal';
-import TopologyView from './components/TopologyView';
+import MapView from './components/MapView';
+import TopologyViewWrapper from './components/TopologyViewWrapper';
 import { clsx } from 'clsx';
 
-// Custom icons for different device types
-const createDeviceIcon = (type: RuckusDevice['type'], status: RuckusDevice['status']) => {
-  const color = status === 'online' ? '#10b981' : status === 'offline' ? '#ef4444' : '#6b7280';
-  
-  let iconSvg = '';
-  switch (type) {
-    case 'ap':
-      iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M2 17L12 22L22 17" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M2 12L12 17L22 12" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-      </svg>`;
-      break;
-    case 'switch':
-      iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="3" width="18" height="18" rx="2" stroke="${color}" stroke-width="2"/>
-        <path d="M9 9H15V15H9V9Z" fill="${color}"/>
-        <path d="M3 9H6" stroke="${color}" stroke-width="2"/>
-        <path d="M18 9H21" stroke="${color}" stroke-width="2"/>
-        <path d="M3 15H6" stroke="${color}" stroke-width="2"/>
-        <path d="M18 15H21" stroke="${color}" stroke-width="2"/>
-      </svg>`;
-      break;
-    case 'router':
-      iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="4" width="20" height="16" rx="2" stroke="${color}" stroke-width="2"/>
-        <path d="M6 8H18" stroke="${color}" stroke-width="2"/>
-        <path d="M6 12H18" stroke="${color}" stroke-width="2"/>
-        <path d="M6 16H14" stroke="${color}" stroke-width="2"/>
-      </svg>`;
-      break;
-    default:
-      iconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="10" stroke="${color}" stroke-width="2"/>
-        <path d="M12 6V12L16 14" stroke="${color}" stroke-width="2"/>
-      </svg>`;
-  }
-
-  return new Icon({
-    iconUrl: `data:image/svg+xml;base64,${btoa(iconSvg)}`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
-};
-
-function App() {
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [devices, setDevices] = useState<RuckusDevice[]>([]);
   const [links, setLinks] = useState<LLDPLink[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<RuckusDevice | null>(null);
+  const [rfNeighbors, setRfNeighbors] = useState<RFNeighbor[]>([]);
   const [filter, setFilter] = useState<DeviceFilter>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [viewMode, setViewMode] = useState<'map' | 'topology'>('map');
   const [apiService, setApiService] = useState<RuckusApiService | DemoApiService | null>(null);
   const [demoMode, setDemoMode] = useState(false);
 
@@ -102,16 +53,54 @@ function App() {
     }
   }, []);
 
-  const loadNetworkData = async () => {
-    if (!apiService) return;
+  // Auto-load data when API service is ready
+  useEffect(() => {
+    if (apiService && demoMode) {
+      loadNetworkData();
+    } else if (apiService && !demoMode) {
+      // For real API, load venues but not devices
+      loadVenues();
+    }
+  }, [apiService, demoMode]);
+
+  const loadVenues = async () => {
+    if (!apiService || apiService instanceof DemoApiService) return;
+    
+    try {
+      const loadedVenues = await (apiService as RuckusApiService).getVenues();
+      setVenues(loadedVenues);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to load venues');
+    }
+  };
+
+  const loadNetworkData = async (venueId?: string) => {
+    if (!apiService) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const topology = await apiService.getNetworkTopology();
-      setDevices(topology.devices);
-      setLinks(topology.links);
+      if (apiService instanceof RuckusApiService) {
+        // For real API, require venue selection to avoid loading all devices
+        if (!venueId) {
+          setDevices([]);
+          setLinks([]);
+          setLoading(false);
+          return;
+        }
+        
+        const topology = await apiService.getNetworkTopology(venueId);
+        setDevices(topology.devices);
+        setLinks(topology.links);
+      } else {
+        // Demo mode - can load without venue
+        const topology = await apiService.getNetworkTopology();
+        setDevices(topology.devices);
+        setLinks(topology.links);
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load network data');
     } finally {
@@ -144,9 +133,47 @@ function App() {
 
   const handleDemoMode = () => {
     localStorage.setItem('demo-mode', 'true');
+    localStorage.removeItem('ruckus-config'); // Clear any existing config
     setDemoMode(true);
     setApiService(new DemoApiService());
     setShowConfig(false);
+  };
+
+  const handleVenueSelect = (venueId: string | null) => {
+    setSelectedVenueId(venueId);
+    if (venueId) {
+      loadNetworkData(venueId);
+      // Navigate to topology view when a venue is selected
+      navigate('/topology');
+    }
+  };
+
+  const handleDeviceSelect = (device: RuckusDevice) => {
+    setSelectedDevice(device);
+    // Clear RF neighbors when selecting a new device
+    setRfNeighbors([]);
+  };
+
+  const handleTriggerRFScan = async () => {
+    if (selectedDevice && selectedDevice.type === 'ap' && apiService instanceof RuckusApiService && selectedVenueId) {
+      try {
+        await apiService.triggerAPRFScan(selectedVenueId, selectedDevice.serialNumber);
+      } catch (error) {
+        console.error(`Failed to trigger RF scan for AP ${selectedDevice.name}:`, error);
+      }
+    }
+  };
+
+  const handleLoadRFNeighbors = async () => {
+    if (selectedDevice && selectedDevice.type === 'ap' && apiService instanceof RuckusApiService && selectedVenueId) {
+      try {
+        const neighbors = await apiService.queryAPRFNeighbors(selectedVenueId, selectedDevice.serialNumber);
+        setRfNeighbors(neighbors);
+      } catch (error) {
+        console.error(`Failed to load RF neighbors for AP ${selectedDevice.name}:`, error);
+        setRfNeighbors([]);
+      }
+    }
   };
 
   if (showConfig) {
@@ -176,35 +203,44 @@ function App() {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => setViewMode('map')}
+                onClick={() => navigate('/map')}
                 className={clsx(
                   'btn btn-secondary',
-                  viewMode === 'map' && 'bg-primary-100 text-primary-700'
+                  location.pathname === '/map' && 'bg-primary-100 text-primary-700'
                 )}
               >
                 <MapPin className="h-4 w-4 mr-2" />
                 Map View
               </button>
               <button
-                onClick={() => setViewMode('topology')}
+                onClick={() => navigate('/topology')}
                 className={clsx(
                   'btn btn-secondary',
-                  viewMode === 'topology' && 'bg-primary-100 text-primary-700'
+                  location.pathname === '/topology' && 'bg-primary-100 text-primary-700'
                 )}
               >
-                <Router className="h-4 w-4 mr-2" />
+                <Wifi className="h-4 w-4 mr-2" />
                 Topology
               </button>
             </div>
             
             <button
-              onClick={loadNetworkData}
-              disabled={loading}
+              onClick={() => loadNetworkData(selectedVenueId || undefined)}
+              disabled={loading || (!demoMode && !selectedVenueId)}
               className="btn btn-primary"
             >
               <RefreshCw className={clsx('h-4 w-4 mr-2', loading && 'animate-spin')} />
               Refresh
             </button>
+            
+            {!demoMode && (
+              <button
+                onClick={handleDemoMode}
+                className="btn btn-secondary"
+              >
+                Try Demo Mode
+              </button>
+            )}
             
             <button
               onClick={() => setShowConfig(true)}
@@ -217,102 +253,87 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex">
-        {/* Sidebar */}
-        <div className="w-80 bg-white shadow-sm border-r border-gray-200 flex flex-col">
-          <FilterPanel
-            filter={filter}
-            onFilterChange={setFilter}
-            deviceCount={filteredDevices.length}
-            totalDevices={devices.length}
-          />
-          
-          {selectedDevice && (
-            <div className="flex-1 overflow-y-auto">
-              <DeviceDetails device={selectedDevice} />
+      <div className="flex-1 flex flex-col relative">
+        {error && (
+          <div className="bg-red-50 border border-red-200 px-6 py-4">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-400" />
+              <div className="text-sm text-red-700">{error}</div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                ×
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Main View */}
-        <div className="flex-1 relative">
-          {error && (
-            <div className="absolute top-4 left-4 right-4 z-50">
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-center space-x-3">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <div className="text-sm text-red-700">{error}</div>
-                <button
-                  onClick={() => setError(null)}
-                  className="text-red-400 hover:text-red-600"
-                >
-                  ×
-                </button>
-              </div>
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-40">
+            <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center space-y-4">
+              <Loader2 className="h-8 w-8 text-primary-600 animate-spin" />
+              <div className="text-sm text-gray-600">Loading network data...</div>
             </div>
-          )}
+          </div>
+        )}
 
-          {loading && (
-            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-40">
-              <div className="text-center">
-                <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
-                <div className="text-gray-600">Loading network data...</div>
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'map' ? (
-            <MapContainer
-              center={[37.7749, -122.4194]} // Default to San Francisco
-              zoom={13}
-              className="h-full w-full"
-            >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              <MapView
+                venues={venues}
+                devices={filteredDevices}
+                selectedVenueId={selectedVenueId}
+                onVenueSelect={handleVenueSelect}
+                demoMode={demoMode}
               />
-              
-              {filteredDevices.map((device) => {
-                if (!device.location) return null;
-                
-                return (
-                  <Marker
-                    key={device.id}
-                    position={[device.location.latitude, device.location.longitude]}
-                    icon={createDeviceIcon(device.type, device.status)}
-                    eventHandlers={{
-                      click: () => setSelectedDevice(device),
-                    }}
-                  >
-                    <Popup>
-                      <div className="p-2">
-                        <h3 className="font-semibold text-gray-900">{device.name}</h3>
-                        <p className="text-sm text-gray-600">{device.model}</p>
-                        <p className="text-sm text-gray-600">{device.ipAddress}</p>
-                        <div className="flex items-center mt-2">
-                          {device.status === 'online' ? (
-                            <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-500 mr-1" />
-                          )}
-                          <span className="text-sm capitalize">{device.status}</span>
-                        </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-            </MapContainer>
-          ) : (
-            <TopologyView
-              devices={filteredDevices}
-              links={links}
-              selectedDevice={selectedDevice}
-              onDeviceSelect={setSelectedDevice}
-            />
-          )}
-        </div>
+            } 
+          />
+          <Route 
+            path="/map" 
+            element={
+              <MapView
+                venues={venues}
+                devices={filteredDevices}
+                selectedVenueId={selectedVenueId}
+                onVenueSelect={handleVenueSelect}
+                demoMode={demoMode}
+              />
+            } 
+          />
+          <Route 
+            path="/topology" 
+            element={
+              <TopologyViewWrapper
+                venues={venues}
+                devices={filteredDevices}
+                links={links}
+                selectedVenueId={selectedVenueId}
+                onVenueSelect={handleVenueSelect}
+                selectedDevice={selectedDevice}
+                rfNeighbors={rfNeighbors}
+                onDeviceSelect={handleDeviceSelect}
+                onLoadRFNeighbors={handleLoadRFNeighbors}
+                onTriggerRFScan={handleTriggerRFScan}
+                loading={loading}
+                demoMode={demoMode}
+              />
+            } 
+          />
+        </Routes>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
