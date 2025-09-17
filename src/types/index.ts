@@ -62,8 +62,8 @@ export interface MapViewport {
 }
 
 export interface DeviceFilter {
-  type?: RuckusDevice['type'];
-  status?: RuckusDevice['status'];
+  types?: RuckusDevice['type'][];
+  statuses?: RuckusDevice['status'][];
   search?: string;
 }
 

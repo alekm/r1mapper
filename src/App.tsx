@@ -110,8 +110,8 @@ function AppContent() {
   };
 
   const filteredDevices = devices.filter(device => {
-    if (filter.type && device.type !== filter.type) return false;
-    if (filter.status && device.status !== filter.status) return false;
+    if (filter.types && filter.types.length > 0 && !filter.types.includes(device.type)) return false;
+    if (filter.statuses && filter.statuses.length > 0 && !filter.statuses.includes(device.status)) return false;
     if (filter.search) {
       const searchLower = filter.search.toLowerCase();
       return (

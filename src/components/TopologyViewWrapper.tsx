@@ -175,34 +175,52 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
                   <h3 className="text-sm font-semibold text-gray-900 mb-2">Device Types</h3>
                   <div className="space-y-2 text-xs mb-4">
                     <button
-                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'ap' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
-                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'ap' ? undefined : 'ap' })}
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.types?.includes('ap') ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => {
+                        const currentTypes = filter.types || [];
+                        const newTypes = currentTypes.includes('ap') 
+                          ? currentTypes.filter(t => t !== 'ap')
+                          : [...currentTypes, 'ap'];
+                        onFilterChange({ ...filter, types: newTypes.length > 0 ? newTypes : undefined });
+                      }}
                     >
                       <span className="flex items-center space-x-2">
                         <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                         <span>Access Points</span>
                       </span>
-                      {filter.type === 'ap' && <span className="text-[10px]">selected</span>}
+                      {filter.types?.includes('ap') && <span className="text-[10px]">selected</span>}
                     </button>
                     <button
-                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'switch' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
-                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'switch' ? undefined : 'switch' })}
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.types?.includes('switch') ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => {
+                        const currentTypes = filter.types || [];
+                        const newTypes = currentTypes.includes('switch') 
+                          ? currentTypes.filter(t => t !== 'switch')
+                          : [...currentTypes, 'switch'];
+                        onFilterChange({ ...filter, types: newTypes.length > 0 ? newTypes : undefined });
+                      }}
                     >
                       <span className="flex items-center space-x-2">
                         <div className="w-3 h-3 rounded-full bg-green-500"></div>
                         <span>Switches</span>
                       </span>
-                      {filter.type === 'switch' && <span className="text-[10px]">selected</span>}
+                      {filter.types?.includes('switch') && <span className="text-[10px]">selected</span>}
                     </button>
                     <button
-                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.type === 'router' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}
-                      onClick={() => onFilterChange({ ...filter, type: filter.type === 'router' ? undefined : 'router' })}
+                      className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.types?.includes('router') ? 'bg-purple-50 text-purple-700' : 'hover:bg-gray-50'}`}
+                      onClick={() => {
+                        const currentTypes = filter.types || [];
+                        const newTypes = currentTypes.includes('router') 
+                          ? currentTypes.filter(t => t !== 'router')
+                          : [...currentTypes, 'router'];
+                        onFilterChange({ ...filter, types: newTypes.length > 0 ? newTypes : undefined });
+                      }}
                     >
                       <span className="flex items-center space-x-2">
                         <div className="w-3 h-3 rounded-full bg-purple-500"></div>
                         <span>Routers</span>
                       </span>
-                      {filter.type === 'router' && <span className="text-[10px]">selected</span>}
+                      {filter.types?.includes('router') && <span className="text-[10px]">selected</span>}
                     </button>
                   </div>
                   
@@ -210,34 +228,52 @@ const TopologyViewWrapper: React.FC<TopologyViewWrapperProps> = ({
                     <h4 className="text-xs font-semibold text-gray-900 mb-2">Status</h4>
                     <div className="space-y-1 text-xs">
                       <button
-                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'online' ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50'}`}
-                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'online' ? undefined : 'online' })}
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.statuses?.includes('online') ? 'bg-green-50 text-green-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => {
+                          const currentStatuses = filter.statuses || [];
+                          const newStatuses = currentStatuses.includes('online') 
+                            ? currentStatuses.filter(s => s !== 'online')
+                            : [...currentStatuses, 'online'];
+                          onFilterChange({ ...filter, statuses: newStatuses.length > 0 ? newStatuses : undefined });
+                        }}
                       >
                         <span className="flex items-center space-x-2">
                           <div className="w-2 h-2 rounded-full bg-green-500"></div>
                           <span>Online</span>
                         </span>
-                        {filter.status === 'online' && <span className="text-[10px]">selected</span>}
+                        {filter.statuses?.includes('online') && <span className="text-[10px]">selected</span>}
                       </button>
                       <button
-                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'offline' ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50'}`}
-                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'offline' ? undefined : 'offline' })}
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.statuses?.includes('offline') ? 'bg-red-50 text-red-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => {
+                          const currentStatuses = filter.statuses || [];
+                          const newStatuses = currentStatuses.includes('offline') 
+                            ? currentStatuses.filter(s => s !== 'offline')
+                            : [...currentStatuses, 'offline'];
+                          onFilterChange({ ...filter, statuses: newStatuses.length > 0 ? newStatuses : undefined });
+                        }}
                       >
                         <span className="flex items-center space-x-2">
                           <div className="w-2 h-2 rounded-full bg-red-500"></div>
                           <span>Offline</span>
                         </span>
-                        {filter.status === 'offline' && <span className="text-[10px]">selected</span>}
+                        {filter.statuses?.includes('offline') && <span className="text-[10px]">selected</span>}
                       </button>
                       <button
-                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.status === 'unknown' ? 'bg-yellow-50 text-yellow-700' : 'hover:bg-gray-50'}`}
-                        onClick={() => onFilterChange({ ...filter, status: filter.status === 'unknown' ? undefined : 'unknown' })}
+                        className={`flex items-center justify-between w-full px-2 py-1 rounded ${filter.statuses?.includes('unknown') ? 'bg-yellow-50 text-yellow-700' : 'hover:bg-gray-50'}`}
+                        onClick={() => {
+                          const currentStatuses = filter.statuses || [];
+                          const newStatuses = currentStatuses.includes('unknown') 
+                            ? currentStatuses.filter(s => s !== 'unknown')
+                            : [...currentStatuses, 'unknown'];
+                          onFilterChange({ ...filter, statuses: newStatuses.length > 0 ? newStatuses : undefined });
+                        }}
                       >
                         <span className="flex items-center space-x-2">
                           <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
                           <span>Unknown</span>
                         </span>
-                        {filter.status === 'unknown' && <span className="text-[10px]">selected</span>}
+                        {filter.statuses?.includes('unknown') && <span className="text-[10px]">selected</span>}
                       </button>
                     </div>
                   </div>
