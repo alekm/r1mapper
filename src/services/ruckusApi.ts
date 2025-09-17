@@ -311,13 +311,14 @@ export class RuckusApiService {
       return switches.map((sw: any) => {
         const rawStatus = sw.status || sw.connectionStatus || sw.state || sw.connectionState || sw.isOnline || sw.online || sw.connected || sw.active;
         const finalStatus = rawStatus || (sw.ipAddress ? 'online' : 'unknown');
+        const idOrMac = (sw.macAddress || sw.mac || sw.id || 'unknown').toLowerCase();
         return {
-          id: (sw.macAddress || sw.mac || sw.id || sw.serialNumber || 'unknown')?.toLowerCase() || '',
+          id: idOrMac,
           name: sw.name || sw.hostname || 'Unknown Switch',
           type: 'switch' as const,
-          model: sw.model || sw.productModel || 'Unknown',
-          serialNumber: sw.serialNumber || sw.id || sw.macAddress || 'unknown',
-          macAddress: (sw.macAddress || sw.mac || 'Unknown')?.toLowerCase() || '',
+          model: sw.model || sw.productModel || sw.specifiedType || 'Unknown',
+          serialNumber: sw.serialNumber || 'Unknown',
+          macAddress: (sw.macAddress || sw.mac || sw.id || 'Unknown').toLowerCase(),
           ipAddress: sw.ipAddress || sw.ip || 'Unknown',
           status: this.mapDeviceStatus(finalStatus),
           location: sw.location ? {
@@ -475,7 +476,7 @@ export class RuckusApiService {
           }
         } else {
           // No switch-port data returned, fall back to AP-based LLDP discovery
-          console.warn('RuckusApiService: No switch-port data; falling back to AP-based LLDP discovery');
+          console.info('RuckusApiService: No switch-port data; attempting AP-based LLDP discovery');
           const aps = await this.getAPs(venueId);
           const apsToCheck = aps.filter(a => a.serialNumber && a.serialNumber !== 'Unknown').slice(0, MAX_APS_TO_CHECK);
           for (const ap of apsToCheck) {
