@@ -423,7 +423,34 @@ export class RuckusApiService {
 
   private async getSwitchPorts(_venueId: string): Promise<any[]> {
     // Note: venueId kept for API scoping in future; currently not used in this query body
-    const res = await apiPost(this.config, '/venues/switches/switchPorts/query', { page: 1, pageSize: 1000 });
+    const queryBody = { page: 1, pageSize: 1000 };
+    console.log('RuckusApiService: switchPorts query body:', queryBody);
+    const res = await apiPost(this.config, '/venues/switches/switchPorts/query', queryBody);
+    console.log('RuckusApiService: switchPorts response type:', typeof res, 'isArray:', Array.isArray(res));
+    if (Array.isArray(res)) {
+      console.log('RuckusApiService: switchPorts count:', res.length);
+      if (res.length > 0) {
+        console.log('RuckusApiService: switchPorts[0] keys:', Object.keys(res[0] || {}));
+        console.log('RuckusApiService: switchPorts[0] sample:', {
+          switchMac: res[0]?.switchMac,
+          portMac: res[0]?.portMac,
+          deviceMac: res[0]?.deviceMac,
+          neighborName: res[0]?.neighborName,
+          neighborMacAddress: res[0]?.neighborMacAddress,
+          neighborMac: res[0]?.neighborMac,
+          chassisId: res[0]?.chassisId,
+          remoteChassisId: res[0]?.remoteChassisId,
+          lldpNeighborMac: res[0]?.lldpNeighborMac,
+          portIdentifier: res[0]?.portIdentifier,
+          portId: res[0]?.portId,
+          remotePortId: res[0]?.remotePortId,
+          neighborPortMacAddress: res[0]?.neighborPortMacAddress,
+          neighborPortMac: res[0]?.neighborPortMac,
+        });
+      }
+    } else {
+      console.log('RuckusApiService: switchPorts response (non-array):', res);
+    }
     return Array.isArray(res) ? res : [];
   }
 
