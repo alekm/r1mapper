@@ -1,4 +1,7 @@
 // Use CommonJS syntax instead of ES modules
+const axios = require('axios');
+const https = require('https');
+
 const handler = async (event, context) => {
   console.log('Function called with:', {
     method: event.httpMethod,
@@ -104,6 +107,10 @@ const handler = async (event, context) => {
     if (event.headers['content-type']) {
       upstreamHeaders['content-type'] = event.headers['content-type'];
     }
+    // Ensure a User-Agent is present (some CDNs reject missing UA)
+    if (!upstreamHeaders['user-agent']) {
+      upstreamHeaders['user-agent'] = 'r1mapper-proxy/1.0';
+    }
     
     // Add Accept header for JSON responses
     upstreamHeaders.accept = 'application/json';
@@ -124,8 +131,36 @@ const handler = async (event, context) => {
       }
     }
 
-    // Make the request to Ruckus One API
-    const response = await fetch(targetUrl, requestOptions);
+    // Make the request to Ruckus One API (built-in fetch first)
+    let response;
+    try {
+      response = await fetch(targetUrl, requestOptions);
+    } catch (fetchErr) {
+      console.error('Primary fetch failed, retrying with axios:', fetchErr && fetchErr.message);
+      // Retry with axios as fallback (common TLS/undici workaround)
+      try {
+        const axiosResp = await axios.request({
+          method: event.httpMethod,
+          url: targetUrl,
+          headers: upstreamHeaders,
+          data: requestOptions.body,
+          // Keep-alive agent can help with some TLS/CDN setups
+          httpsAgent: new https.Agent({ keepAlive: true }),
+          validateStatus: () => true, // pass through status
+        });
+
+        const axContentType = axiosResp.headers['content-type'] || 'application/json';
+        const axBody = typeof axiosResp.data === 'string' ? axiosResp.data : JSON.stringify(axiosResp.data);
+        return {
+          statusCode: axiosResp.status,
+          headers: { ...headers, 'content-type': axContentType },
+          body: axBody,
+        };
+      } catch (axiosErr) {
+        console.error('Axios fallback failed:', axiosErr && axiosErr.message);
+        throw axiosErr;
+      }
+    }
     
     // Get response body and handle different content types
     let responseBody;
