@@ -304,7 +304,7 @@ export class RuckusApiService {
           name: sw.name || sw.hostname || 'Unknown Switch',
           type: 'switch' as const,
           model: sw.model || sw.productModel || sw.specifiedType || 'Unknown',
-          serialNumber: sw.serialNumber || 'Unknown',
+          serialNumber: 'N/A', // Switches use MAC address as identifier
           macAddress: (sw.macAddress || sw.mac || sw.id || 'Unknown').toLowerCase(),
           ipAddress: sw.ipAddress || sw.ip || 'Unknown',
           status: this.mapDeviceStatus(finalStatus),
@@ -337,8 +337,8 @@ export class RuckusApiService {
         if (d && d.detail) idToDetail[d.id] = d.detail;
       }
 
-      // Try to enrich with switchPorts data which contains switchModel/switchSerial
-      let portsMap: Record<string, { model?: string; serial?: string }> = {};
+      // Try to enrich with switchPorts data which contains switchModel
+      let portsMap: Record<string, { model?: string }> = {};
       try {
         const ports = await this.getSwitchPorts('');
         if (Array.isArray(ports)) {
@@ -346,8 +346,7 @@ export class RuckusApiService {
             const mac = (p.switchMac || '').toLowerCase();
             if (!mac) continue;
             const model = p.switchModel || portsMap[mac]?.model;
-            const serial = p.switchSerial || portsMap[mac]?.serial;
-            portsMap[mac] = { model, serial };
+            portsMap[mac] = { model };
           }
         }
       } catch {}
@@ -358,8 +357,7 @@ export class RuckusApiService {
         const detail = idToDetail[sw.id];
         const fromPorts = portsMap[sw.id] || {};
         const model = (detail?.model || detail?.productModel || detail?.specifiedType || fromPorts.model || sw.model);
-        const serial = (detail?.serialNumber || fromPorts.serial || sw.serialNumber);
-        return { ...sw, model, serialNumber: serial };
+        return { ...sw, model, serialNumber: 'N/A' }; // Switches use MAC address as identifier
       });
     } catch (error) {
       return [];
