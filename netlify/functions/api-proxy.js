@@ -131,68 +131,32 @@ const handler = async (event, context) => {
       }
     }
 
-    // Make the request to Ruckus One API (built-in fetch first)
-    let response;
-    try {
-      response = await fetch(targetUrl, requestOptions);
-    } catch (fetchErr) {
-      console.error('Primary fetch failed, retrying with axios:', fetchErr && fetchErr.message);
-      // Retry with axios as fallback (common TLS/undici workaround)
-      try {
-        const axiosResp = await axios.request({
-          method: event.httpMethod,
-          url: targetUrl,
-          headers: upstreamHeaders,
-          data: requestOptions.body,
-          // Keep-alive agent can help with some TLS/CDN setups
-          httpsAgent: new https.Agent({ keepAlive: true }),
-          validateStatus: () => true, // pass through status
-        });
+    // Make the request to Ruckus One API using axios only
+    const axiosResp = await axios.request({
+      method: event.httpMethod,
+      url: targetUrl,
+      headers: upstreamHeaders,
+      data: requestOptions.body,
+      httpsAgent: new https.Agent({ keepAlive: true }),
+      validateStatus: () => true, // pass through status
+    });
 
-        const axContentType = axiosResp.headers['content-type'] || 'application/json';
-        const axBody = typeof axiosResp.data === 'string' ? axiosResp.data : JSON.stringify(axiosResp.data);
-        return {
-          statusCode: axiosResp.status,
-          headers: { ...headers, 'content-type': axContentType },
-          body: axBody,
-        };
-      } catch (axiosErr) {
-        console.error('Axios fallback failed:', axiosErr && axiosErr.message);
-        throw axiosErr;
-      }
-    }
-    
-    // Get response body and handle different content types
-    let responseBody;
-    const contentType = response.headers.get('content-type');
-    
-    try {
-      if (contentType && contentType.includes('application/json')) {
-        responseBody = await response.json();
-      } else {
-        responseBody = await response.text();
-      }
-    } catch (parseError) {
-      console.error('Response parsing error:', parseError.message);
-      responseBody = await response.text();
-    }
+    const axContentType = axiosResp.headers['content-type'] || 'application/json';
+    const axBody = typeof axiosResp.data === 'string' ? axiosResp.data : JSON.stringify(axiosResp.data);
 
     // Debug logging for response
     console.log('Proxy response:', {
-      status: response.status,
-      contentType: contentType,
-      bodyType: typeof responseBody,
-      bodyLength: typeof responseBody === 'string' ? responseBody.length : 'object'
+      status: axiosResp.status,
+      contentType: axContentType,
+      bodyType: typeof axiosResp.data,
+      bodyLength: typeof axiosResp.data === 'string' ? axiosResp.data.length : 'object'
     });
 
     // Return the response
     return {
-      statusCode: response.status,
-      headers: {
-        ...headers,
-        'content-type': contentType || 'application/json'
-      },
-      body: typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody)
+      statusCode: axiosResp.status,
+      headers: { ...headers, 'content-type': axContentType },
+      body: axBody,
     };
 
   } catch (error) {
