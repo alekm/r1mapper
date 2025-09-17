@@ -7,7 +7,14 @@ const REGIONAL_ENDPOINTS = {
   asia: 'https://api.asia.ruckus.cloud'
 };
 
-export const handler = async (event, context) => {
+export default async function handler(event, context) {
+  console.log('Function called with:', {
+    method: event.httpMethod,
+    path: event.path,
+    queryString: event.queryStringParameters,
+    hasBody: !!event.body
+  });
+
   // Enable CORS for browser requests
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -130,15 +137,20 @@ export const handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Proxy error:', error.message);
+    console.error('Proxy error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Internal server error',
-        message: error.message 
+        message: error.message,
+        stack: error.stack
       })
     };
   }
-};
+}
