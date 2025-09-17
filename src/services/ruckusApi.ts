@@ -28,7 +28,18 @@ export class RuckusApiService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {
+        errorText = 'Unable to parse error response';
+      }
+      
+      // Handle specific authentication errors
+      if (response.status === 500 && errorText.includes('maximum redirect reached')) {
+        throw new Error('Authentication failed - please check your credentials');
+      }
+      
       throw new Error(`Authentication failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
