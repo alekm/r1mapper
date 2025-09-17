@@ -46,8 +46,12 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Construct the target URL
-    const targetUrl = `${apiBase}${path}`;
+    // Construct the target URL (forward all query params like region)
+    const qsObj = event.queryStringParameters || {};
+    const qs = Object.keys(qsObj)
+      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(qsObj[k]))}`)
+      .join('&');
+    const targetUrl = qs ? `${apiBase}${path}?${qs}` : `${apiBase}${path}`;
     
     // Debug logging
     console.log('Proxy request:', {
