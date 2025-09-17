@@ -138,36 +138,37 @@ const handler = async (event, context) => {
     // SPECIAL HANDLING: OAuth client_credentials token
     // Normalize to POST /oauth2/token (no tenant in path), enforce body and headers
     const isTokenPath = /\/oauth2\/token(\/[^/?]+)?/i.test(path);
+    let tenantIdHeader;
     if (isTokenPath) {
       // Extract tenantId from path if present
       const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
       const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
       const hdrs = event.headers || {};
-      const tenantIdHeader = hdrs['x-rks-tenantid'] || hdrs['x-tenant-id'] || hdrs['X-RKS-TenantID'] || hdrs['X-Tenant-Id'] || tenantIdFromPath;
+      tenantIdHeader = hdrs['x-rks-tenantid'] || hdrs['x-tenant-id'] || hdrs['X-RKS-TenantID'] || hdrs['X-Tenant-Id'] || tenantIdFromPath;
 
       // Always call non-tenant endpoint
       targetUrl = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
 
       // Force method/body/headers for client_credentials
       requestOptions.method = 'POST';
-      requestOptions.headers = {
-        ...requestOptions.headers,
-        'content-type': 'application/x-www-form-urlencoded',
-        ...(tenantIdHeader ? { 'x-rks-tenantid': tenantIdHeader, 'x-tenant-id': tenantIdHeader } : {}),
-      };
+      // mark: we'll apply header normalization when building final axios headers
       // Body must be exactly grant_type=client_credentials
       requestOptions.body = 'grant_type=client_credentials';
     }
 
     // Make the request to Ruckus One API using axios only
+    // Build final headers for axios
+    const finalHeaders = {
+      ...upstreamHeaders,
+      'x-region': region,
+      ...(isTokenPath ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
+      ...(isTokenPath && tenantIdHeader ? { 'x-rks-tenantid': tenantIdHeader, 'x-tenant-id': tenantIdHeader } : {}),
+    };
+
     let axiosResp = await axios.request({
       method: event.httpMethod,
       url: targetUrl,
-      headers: {
-        ...upstreamHeaders,
-        // Upstream sometimes expects region both in query and header. Send both.
-        'x-region': region,
-      },
+      headers: finalHeaders,
       data: requestOptions.body,
       httpsAgent: new https.Agent({ keepAlive: true }),
       maxRedirects: 0, // avoid upstream redirect loops, surface Location if any
@@ -185,10 +186,7 @@ const handler = async (event, context) => {
       axiosResp = await axios.request({
         method: event.httpMethod,
         url: nextUrl,
-        headers: {
-          ...upstreamHeaders,
-          'x-region': region,
-        },
+        headers: finalHeaders,
         data: requestOptions.body,
         httpsAgent: new https.Agent({ keepAlive: true }),
         maxRedirects: 0,
@@ -214,8 +212,7 @@ const handler = async (event, context) => {
         method: 'POST',
         url: tokenUrlNoTenant,
         headers: {
-          ...upstreamHeaders,
-          'x-region': region,
+          ...finalHeaders,
           ...(tenantIdFromPath ? { 'x-rks-tenantid': tenantIdFromPath, 'x-tenant-id': tenantIdFromPath } : {}),
         },
         data: requestOptions.body,
