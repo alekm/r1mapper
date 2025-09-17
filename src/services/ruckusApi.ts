@@ -250,7 +250,16 @@ export class RuckusApiService {
       return data.map((venue: any) => ({
         id: venue.id || venue.venueId || '',
         name: venue.name || 'Unnamed Venue',
-        address: venue.address || '',
+        address: (() => {
+          if (!venue.address) return '';
+          if (typeof venue.address === 'string') return venue.address;
+          if (typeof venue.address === 'object') {
+            // Convert address object to string
+            const addr = venue.address;
+            return addr.addressLine || addr.city || addr.country || '';
+          }
+          return '';
+        })(),
         location: venue.location ? {
           latitude: parseFloat(venue.location.latitude) || 0,
           longitude: parseFloat(venue.location.longitude) || 0,
