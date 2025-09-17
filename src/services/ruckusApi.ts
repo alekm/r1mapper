@@ -337,52 +337,17 @@ export class RuckusApiService {
   }
 
   async getNetworkTopology(venueId?: string): Promise<{ devices: RuckusDevice[]; links: LLDPLink[] }> {
-    const devices = await this.getDevices(venueId);
-    const links: LLDPLink[] = [];
+    try {
+      const [devices, links] = await Promise.all([
+        this.getDevices(venueId),
+        this.getLLDPLinks(venueId)
+      ]);
 
-    // Get LLDP neighbors for each device
-    for (const device of devices) {
-      try {
-        if (device.type === 'ap') {
-          // For APs, get RF neighbors
-          const rfNeighbors = await this.getAPRFNeighbors(device.serialNumber, venueId);
-          rfNeighbors.forEach(neighbor => {
-            const targetDevice = devices.find(d => d.macAddress === neighbor.macAddress);
-            if (targetDevice) {
-              links.push({
-                id: `${device.id}-${targetDevice.id}`,
-                source: device.id,
-                target: targetDevice.id,
-                sourcePort: 'RF',
-                targetPort: 'RF',
-                type: 'rf',
-              });
-            }
-          });
-        } else if (device.type === 'switch') {
-          // For switches, get LLDP neighbors
-          const lldpNeighbors = await this.getSwitchNeighbors(device.id);
-          lldpNeighbors.forEach(neighbor => {
-            const targetDevice = devices.find(d => d.macAddress === neighbor.macAddress);
-            if (targetDevice) {
-              links.push({
-                id: `${device.id}-${targetDevice.id}`,
-                source: device.id,
-                target: targetDevice.id,
-                sourcePort: neighbor.localPort || 'Unknown',
-                targetPort: neighbor.remotePort || 'Unknown',
-                type: 'lldp',
-              });
-            }
-          });
-        }
-      } catch (error) {
-        // Continue with other devices if one fails
-        console.warn(`Failed to get neighbors for device ${device.id}:`, error);
-      }
+      return { devices, links };
+    } catch (error) {
+      console.error('RuckusApiService: Failed to fetch network topology:', error);
+      throw new Error('Failed to fetch network topology from Ruckus One API');
     }
-
-    return { devices, links };
   }
 
   async getAPRFNeighbors(serialNumber: string, venueId?: string): Promise<RFNeighbor[]> {
@@ -472,6 +437,64 @@ export class RuckusApiService {
       return neighbors;
     } catch (error) {
       console.error('RuckusApiService: Failed to query RF neighbors:', error);
+      return [];
+    }
+  }
+
+  async getSwitchPorts(venueId: string): Promise<any[]> {
+    try {
+      const requestBody = {
+        page: 1,
+        pageSize: 1000
+      };
+      
+      const response = await apiPost(this.config, '/venues/switches/switchPorts/query', requestBody);
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error('RuckusApiService: Failed to fetch switch ports:', error);
+      return [];
+    }
+  }
+
+  async getLLDPLinks(venueId?: string): Promise<LLDPLink[]> {
+    try {
+      const allLinks: LLDPLink[] = [];
+
+      if (venueId) {
+        try {
+          const switchPorts = await this.getSwitchPorts(venueId);
+          
+          for (const port of switchPorts) {
+            const neighborName = port.neighborName || port.systemName || port.remoteSystemName || port.lldpNeighborName;
+            const neighborMac = port.neighborMacAddress || port.neighborMac || port.chassisId || port.remoteChassisId || port.lldpNeighborMac;
+            const neighborPort = port.remotePortId || port.portId || port.neighborPortMacAddress || port.neighborPortMac;
+            
+            if (neighborName && neighborMac) {
+              const localDeviceMac = (port.switchMac || port.portMac || port.deviceMac)?.toLowerCase();
+              const remoteDeviceMac = neighborMac?.toLowerCase();
+              
+              const link: LLDPLink = {
+                id: `${localDeviceMac}-${port.portIdentifier || port.portId}-${remoteDeviceMac}`,
+                localDeviceId: localDeviceMac,
+                remoteDeviceId: remoteDeviceMac,
+                localPort: port.portIdentifier || port.portId || 'Unknown',
+                remotePort: neighborPort || 'Unknown',
+                localPortDescription: port.name || port.tags || 'Switch Port',
+                remotePortDescription: neighborName || 'Unknown Device',
+                lastUpdated: new Date().toISOString()
+              };
+              
+              allLinks.push(link);
+            }
+          }
+        } catch (error) {
+          console.error('RuckusApiService: Failed to fetch LLDP links:', error);
+        }
+      }
+
+      return allLinks;
+    } catch (error) {
+      console.error('RuckusApiService: Failed to get LLDP links:', error);
       return [];
     }
   }
