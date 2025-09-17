@@ -697,8 +697,6 @@ const TopologyView: React.FC<TopologyViewProps> = ({
                 cy={position.y - 18}
                 r={5}
                 fill={statusColor}
-                stroke="#ffffff"
-                strokeWidth={2}
               />
               
               {/* Status text */}
