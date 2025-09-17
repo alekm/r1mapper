@@ -427,31 +427,32 @@ export class RuckusApiService {
     console.log('RuckusApiService: switchPorts query body:', queryBody);
     const res = await apiPost(this.config, '/venues/switches/switchPorts/query', queryBody);
     console.log('RuckusApiService: switchPorts response type:', typeof res, 'isArray:', Array.isArray(res));
-    if (Array.isArray(res)) {
-      console.log('RuckusApiService: switchPorts count:', res.length);
-      if (res.length > 0) {
-        console.log('RuckusApiService: switchPorts[0] keys:', Object.keys(res[0] || {}));
-        console.log('RuckusApiService: switchPorts[0] sample:', {
-          switchMac: res[0]?.switchMac,
-          portMac: res[0]?.portMac,
-          deviceMac: res[0]?.deviceMac,
-          neighborName: res[0]?.neighborName,
-          neighborMacAddress: res[0]?.neighborMacAddress,
-          neighborMac: res[0]?.neighborMac,
-          chassisId: res[0]?.chassisId,
-          remoteChassisId: res[0]?.remoteChassisId,
-          lldpNeighborMac: res[0]?.lldpNeighborMac,
-          portIdentifier: res[0]?.portIdentifier,
-          portId: res[0]?.portId,
-          remotePortId: res[0]?.remotePortId,
-          neighborPortMacAddress: res[0]?.neighborPortMacAddress,
-          neighborPortMac: res[0]?.neighborPortMac,
-        });
-      }
-    } else {
-      console.log('RuckusApiService: switchPorts response (non-array):', res);
+    
+    // Extract data array from paginated response
+    const ports = Array.isArray(res) ? res : (res as any)?.data || [];
+    console.log('RuckusApiService: switchPorts count:', ports.length);
+    
+    if (ports.length > 0) {
+      console.log('RuckusApiService: switchPorts[0] keys:', Object.keys(ports[0] || {}));
+      console.log('RuckusApiService: switchPorts[0] sample:', {
+        switchMac: ports[0]?.switchMac,
+        portMac: ports[0]?.portMac,
+        deviceMac: ports[0]?.deviceMac,
+        neighborName: ports[0]?.neighborName,
+        neighborMacAddress: ports[0]?.neighborMacAddress,
+        neighborMac: ports[0]?.neighborMac,
+        chassisId: ports[0]?.chassisId,
+        remoteChassisId: ports[0]?.remoteChassisId,
+        lldpNeighborMac: ports[0]?.lldpNeighborMac,
+        portIdentifier: ports[0]?.portIdentifier,
+        portId: ports[0]?.portId,
+        remotePortId: ports[0]?.remotePortId,
+        neighborPortMacAddress: ports[0]?.neighborPortMacAddress,
+        neighborPortMac: ports[0]?.neighborPortMac,
+      });
     }
-    return Array.isArray(res) ? res : [];
+    
+    return ports;
   }
 
   // AP-based LLDP neighbor collection removed
