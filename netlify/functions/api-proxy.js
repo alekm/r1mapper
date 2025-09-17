@@ -81,29 +81,6 @@ const handler = async (event, context) => {
       ? `${apiBase}${path}?${forwardedParams}`
       : `${apiBase}${path}`;
 
-    // SPECIAL HANDLING: OAuth client_credentials token
-    // Normalize to POST /oauth2/token (no tenant in path), enforce body and headers
-    const isTokenPath = /\/oauth2\/token(\/[^/?]+)?/i.test(path);
-    if (isTokenPath) {
-      // Extract tenantId from path if present
-      const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
-      const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
-      const tenantIdHeader = event.headers['x-rks-tenantid'] || event.headers['x-tenant-id'] || tenantIdFromPath;
-
-      // Always call non-tenant endpoint
-      targetUrl = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
-
-      // Force method/body/headers for client_credentials
-      requestOptions.method = 'POST';
-      requestOptions.headers = {
-        ...requestOptions.headers,
-        'content-type': 'application/x-www-form-urlencoded',
-        ...(tenantIdHeader ? { 'x-rks-tenantid': tenantIdHeader, 'x-tenant-id': tenantIdHeader } : {}),
-      };
-      // Body must be exactly grant_type=client_credentials
-      requestOptions.body = 'grant_type=client_credentials';
-    }
-    
     // Debug logging
     console.log('Proxy request:', {
       method: event.httpMethod,
@@ -156,6 +133,30 @@ const handler = async (event, context) => {
       } else {
         requestOptions.body = event.body;
       }
+    }
+
+    // SPECIAL HANDLING: OAuth client_credentials token
+    // Normalize to POST /oauth2/token (no tenant in path), enforce body and headers
+    const isTokenPath = /\/oauth2\/token(\/[^/?]+)?/i.test(path);
+    if (isTokenPath) {
+      // Extract tenantId from path if present
+      const tenantMatch = path.match(/\/oauth2\/token\/([^/?]+)/i);
+      const tenantIdFromPath = tenantMatch ? tenantMatch[1] : undefined;
+      const hdrs = event.headers || {};
+      const tenantIdHeader = hdrs['x-rks-tenantid'] || hdrs['x-tenant-id'] || hdrs['X-RKS-TenantID'] || hdrs['X-Tenant-Id'] || tenantIdFromPath;
+
+      // Always call non-tenant endpoint
+      targetUrl = `${apiBase}/oauth2/token${forwardedParams ? `?${forwardedParams}` : ''}`;
+
+      // Force method/body/headers for client_credentials
+      requestOptions.method = 'POST';
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        'content-type': 'application/x-www-form-urlencoded',
+        ...(tenantIdHeader ? { 'x-rks-tenantid': tenantIdHeader, 'x-tenant-id': tenantIdHeader } : {}),
+      };
+      // Body must be exactly grant_type=client_credentials
+      requestOptions.body = 'grant_type=client_credentials';
     }
 
     // Make the request to Ruckus One API using axios only
