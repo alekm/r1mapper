@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 // Regional API endpoints mapping
 const REGIONAL_ENDPOINTS = {
@@ -7,7 +7,7 @@ const REGIONAL_ENDPOINTS = {
   asia: 'https://api.asia.ruckus.cloud'
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Enable CORS for browser requests
   const headers = {
     'Access-Control-Allow-Origin': '*',
