@@ -292,6 +292,7 @@ export class RuckusApiService {
               type: 'ap' as const,
               status: (() => {
                 const status = ap.status || '';
+                console.log('AP status mapping:', { name: ap.name, originalStatus: status });
                 if (status.includes('2_00_Operational') || status === 'online') return 'online';
                 if (status.includes('needs_attention') || status === 'offline') return 'offline';
                 return 'unknown';
@@ -321,6 +322,7 @@ export class RuckusApiService {
             type: 'switch' as const,
             status: (() => {
               const status = switchDevice.status || '';
+              console.log('Switch status mapping:', { name: switchDevice.name, originalStatus: status });
               if (status.includes('2_00_Operational') || status === 'online') return 'online';
               if (status.includes('needs_attention') || status === 'offline') return 'offline';
               return 'unknown';
