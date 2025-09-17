@@ -56,10 +56,15 @@ function AppContent() {
   // Auto-load data when API service is ready
   useEffect(() => {
     if (apiService && demoMode) {
-      loadNetworkData();
+      // Defer demo data load to avoid blocking the initial render
+      setTimeout(() => {
+        loadNetworkData();
+      }, 0);
     } else if (apiService && !demoMode) {
       // For real API, load venues but not devices
-      loadVenues();
+      setTimeout(() => {
+        loadVenues();
+      }, 0);
     }
   }, [apiService, demoMode]);
 
